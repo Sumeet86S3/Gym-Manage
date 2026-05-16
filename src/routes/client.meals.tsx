@@ -1,0 +1,312 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useRef, useState } from "react";
+import {
+  Camera,
+  ImagePlus,
+  Loader2,
+  UploadCloud,
+  X,
+  Coffee,
+  Salad,
+  Soup,
+  Cookie,
+  Clock,
+} from "lucide-react";
+import { toast } from "sonner";
+import { PageHeader } from "@/components/app-shell";
+import { MealTypeBadge } from "@/components/meal/meal-type-badge";
+import { mockMeals, type MealEntry, type MealType } from "@/lib/mock-data";
+import { useAuth } from "@/lib/auth";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
+
+export const Route = createFileRoute("/client/meals")({
+  component: ClientMealsPage,
+});
+
+const mealOptions: { value: MealType; icon: typeof Coffee; hint: string }[] = [
+  { value: "Breakfast", icon: Coffee, hint: "Morning fuel" },
+  { value: "Lunch", icon: Salad, hint: "Midday refuel" },
+  { value: "Dinner", icon: Soup, hint: "Evening recovery" },
+  { value: "Snacks", icon: Cookie, hint: "In-between bites" },
+];
+
+function ClientMealsPage() {
+  const { user } = useAuth();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const [type, setType] = useState<MealType>("Breakfast");
+  const [note, setNote] = useState("");
+  const [preview, setPreview] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [meals, setMeals] = useState<MealEntry[]>(
+    mockMeals.filter((m) => m.clientName === user?.name || m.clientId === "c1").slice(0, 4),
+  );
+
+  const handleFile = (file: File | null | undefined) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please upload an image file");
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setPreview(url);
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragging(false);
+    handleFile(e.dataTransfer.files?.[0]);
+  };
+
+  const reset = () => {
+    setPreview(null);
+    setNote("");
+    if (fileRef.current) fileRef.current.value = "";
+    if (cameraRef.current) cameraRef.current.value = "";
+  };
+
+  const submit = async () => {
+    if (!preview) {
+      toast.error("Add a meal photo first");
+      return;
+    }
+    setSubmitting(true);
+    await new Promise((r) => setTimeout(r, 900));
+    const now = new Date();
+    const entry: MealEntry = {
+      id: `m-${Date.now()}`,
+      clientId: "me",
+      clientName: user?.name ?? "You",
+      type,
+      time: now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+      timestamp: now.getTime(),
+      note: note.trim() || undefined,
+      image: preview,
+    };
+    setMeals((m) => [entry, ...m]);
+    setSubmitting(false);
+    toast.success("Meal uploaded! Your trainer can see it now. 🥗");
+    reset();
+  };
+
+  return (
+    <div className="space-y-8">
+      <PageHeader
+        title="Meal Tracker"
+        description="Snap, log, and stay accountable. Your trainer sees every entry in real time."
+      />
+
+      {/* Upload card */}
+      <div className="relative overflow-hidden rounded-3xl border border-border bg-card shadow-card">
+        <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-br from-primary/15 via-primary-glow/10 to-accent/15 blur-2xl" />
+        <div className="relative grid gap-6 p-5 md:grid-cols-[1.1fr_1fr] md:p-7">
+          {/* Upload area */}
+          <div>
+            <label className="text-sm font-medium text-foreground">Meal photo</label>
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragging(true);
+              }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={onDrop}
+              className={cn(
+                "group relative mt-2 flex aspect-[4/3] w-full items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed transition-all",
+                dragging
+                  ? "border-primary bg-primary/5 scale-[1.01]"
+                  : "border-border bg-muted/40 hover:border-primary/50 hover:bg-muted/60",
+              )}
+            >
+              {preview ? (
+                <>
+                  <img src={preview} alt="Meal preview" className="h-full w-full object-cover" />
+                  <button
+                    onClick={reset}
+                    className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-full bg-background/90 text-foreground shadow-card backdrop-blur transition hover:scale-105"
+                    aria-label="Remove image"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </>
+              ) : (
+                <div className="flex flex-col items-center gap-3 px-6 text-center">
+                  <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-primary-glow text-primary-foreground shadow-glow">
+                    <UploadCloud className="h-7 w-7" />
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">
+                      Drag & drop your meal photo
+                    </p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      PNG, JPG up to 10MB — or pick a source below
+                    </p>
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => fileRef.current?.click()}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3.5 py-1.5 text-xs font-medium shadow-soft transition hover:bg-muted"
+                    >
+                      <ImagePlus className="h-3.5 w-3.5" /> Gallery
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => cameraRef.current?.click()}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3.5 py-1.5 text-xs font-medium shadow-soft transition hover:bg-muted"
+                    >
+                      <Camera className="h-3.5 w-3.5" /> Camera
+                    </button>
+                  </div>
+                </div>
+              )}
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => handleFile(e.target.files?.[0])}
+              />
+              <input
+                ref={cameraRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={(e) => handleFile(e.target.files?.[0])}
+              />
+            </div>
+          </div>
+
+          {/* Form */}
+          <div className="flex flex-col gap-5">
+            <div>
+              <label className="text-sm font-medium text-foreground">Meal type</label>
+              <Select value={type} onValueChange={(v) => setType(v as MealType)}>
+                <SelectTrigger className="mt-2 h-11 rounded-xl">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {mealOptions.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      <span className="flex items-center gap-2">
+                        <opt.icon className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-medium">{opt.value}</span>
+                        <span className="text-xs text-muted-foreground">· {opt.hint}</span>
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium text-foreground">
+                Note <span className="font-normal text-muted-foreground">(optional)</span>
+              </label>
+              <textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                rows={4}
+                placeholder="e.g. High protein breakfast, cheat meal, post workout meal…"
+                className="mt-2 w-full resize-none rounded-xl border border-input bg-background px-3.5 py-3 text-sm transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+              />
+            </div>
+
+            <button
+              onClick={submit}
+              disabled={submitting}
+              className={cn(
+                "group relative mt-auto inline-flex h-12 items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-r from-primary to-primary-glow px-5 text-sm font-semibold text-primary-foreground shadow-glow transition active:scale-[0.98] disabled:opacity-70",
+              )}
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Uploading…
+                </>
+              ) : (
+                <>
+                  <UploadCloud className="h-4 w-4" />
+                  Upload Meal
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* History */}
+      <section>
+        <div className="mb-4 flex items-end justify-between">
+          <div>
+            <h2 className="text-lg font-semibold tracking-tight text-foreground">
+              Today's Meal Uploads
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {meals.length} {meals.length === 1 ? "entry" : "entries"} logged
+            </p>
+          </div>
+        </div>
+
+        {meals.length === 0 ? (
+          <EmptyMeals />
+        ) : (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {meals.map((m) => (
+              <MealHistoryCard key={m.id} meal={m} />
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function MealHistoryCard({ meal }: { meal: MealEntry }) {
+  return (
+    <article className="group overflow-hidden rounded-2xl border border-border bg-card shadow-card transition hover:-translate-y-0.5 hover:shadow-elevated">
+      <div className="relative aspect-[4/3] overflow-hidden bg-muted">
+        <img
+          src={meal.image}
+          alt={meal.type}
+          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+          loading="lazy"
+        />
+        <div className="absolute left-3 top-3">
+          <MealTypeBadge type={meal.type} />
+        </div>
+      </div>
+      <div className="space-y-1.5 p-4">
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Clock className="h-3.5 w-3.5" />
+          {meal.time}
+        </div>
+        {meal.note && (
+          <p className="line-clamp-2 text-sm text-foreground">{meal.note}</p>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function EmptyMeals() {
+  return (
+    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/30 px-6 py-14 text-center">
+      <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+        <UploadCloud className="h-7 w-7" />
+      </span>
+      <h3 className="mt-4 text-base font-semibold text-foreground">No meals logged yet</h3>
+      <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+        Upload your first meal photo above — your trainer will see it instantly.
+      </p>
+    </div>
+  );
+}
