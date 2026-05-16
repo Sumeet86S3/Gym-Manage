@@ -1,14 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader } from "@/components/app-shell";
 import { StatusBadge } from "@/components/status-badge";
-import { mockTrainers } from "@/lib/mock-data";
+import type { Trainer } from "@/lib/types";
+import { useApiResource } from "@/hooks/use-api-resource";
 
 export const Route = createFileRoute("/admin/trainers")({
   component: TrainersPage,
 });
 
 function TrainersPage() {
-  const approved = mockTrainers.filter((t) => t.status === "Approved");
+  const { data: trainers } = useApiResource<Trainer[]>("/trainers", []);
+  const approved = trainers.filter((t) => t.status === "Approved");
   return (
     <div>
       <PageHeader title="Trainers" description="All approved trainers in your studio." />
@@ -17,7 +19,11 @@ function TrainersPage() {
           <div key={t.id} className="rounded-2xl border border-border bg-card p-5 shadow-card">
             <div className="flex items-center gap-3">
               <span className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-primary text-sm font-semibold text-primary-foreground">
-                {t.name.split(" ").map((n) => n[0]).slice(0, 2).join("")}
+                {t.name
+                  .split(" ")
+                  .map((n) => n[0])
+                  .slice(0, 2)
+                  .join("")}
               </span>
               <div>
                 <p className="font-semibold">{t.name}</p>
@@ -36,7 +42,9 @@ function TrainersPage() {
             </div>
             <div className="mt-4 flex items-center justify-between">
               <StatusBadge tone="success">{t.status}</StatusBadge>
-              <button className="text-xs font-medium text-primary hover:underline">View profile</button>
+              <button className="text-xs font-medium text-primary hover:underline">
+                View profile
+              </button>
             </div>
           </div>
         ))}

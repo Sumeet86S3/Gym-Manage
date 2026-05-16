@@ -1,4 +1,4 @@
-import type { FeedbackEntry } from "./mock-data";
+import type { FeedbackEntry } from "./types";
 
 export function feedbackTone(f: FeedbackEntry): "destructive" | "warning" | "success" {
   if (f.issue !== "No issue") return "destructive";

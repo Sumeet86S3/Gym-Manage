@@ -15,6 +15,8 @@ function SignupPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const Background = () => (
     <div className="absolute inset-0 -z-10">
@@ -52,9 +54,17 @@ function SignupPage() {
     );
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    signupTrainer(name || "New Trainer", email, password);
+    setError("");
+    setSubmitting(true);
+    try {
+      await signupTrainer(name || "New Trainer", email, password);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to submit application");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -76,7 +86,9 @@ function SignupPage() {
             <span className="inline-flex items-center rounded-full bg-accent/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-accent">
               Trainer application
             </span>
-            <h1 className="mt-4 font-display text-3xl font-semibold tracking-tight">Apply as a trainer</h1>
+            <h1 className="mt-4 font-display text-3xl font-semibold tracking-tight">
+              Apply as a trainer
+            </h1>
             <p className="mt-1.5 text-sm text-muted-foreground">
               Trainers join by application. An admin will review your account.
             </p>
@@ -97,11 +109,19 @@ function SignupPage() {
                   />
                 </div>
               ))}
-              <button className="btn-glow group flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground">
-                Submit application
+              <button
+                disabled={submitting}
+                className="btn-glow group flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground"
+              >
+                {submitting ? "Submitting..." : "Submit application"}
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
               </button>
             </form>
+            {error && (
+              <p className="mt-3 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {error}
+              </p>
+            )}
             <p className="mt-5 text-center text-sm text-muted-foreground">
               Already have access?{" "}
               <Link to="/login" className="font-medium text-primary hover:underline">

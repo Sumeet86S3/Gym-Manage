@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Plus, Search, Eye, Pencil, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/app-shell";
 import { StatusBadge } from "@/components/status-badge";
-import { mockClients, type Client } from "@/lib/mock-data";
+import type { Client } from "@/lib/types";
 import {
   Dialog,
   DialogContent,
@@ -13,34 +13,27 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { api } from "@/lib/api";
+import { useApiResource } from "@/hooks/use-api-resource";
 
 export const Route = createFileRoute("/trainer/clients")({
   component: ClientsPage,
 });
 
 function ClientsPage() {
-  const [clients, setClients] = useState<Client[]>(mockClients);
+  const { data: clients, setData: setClients } = useApiResource<Client[]>("/clients", []);
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", goal: "" });
 
   const filtered = clients.filter((c) => c.name.toLowerCase().includes(query.toLowerCase()));
 
-  const addClient = (e: React.FormEvent) => {
+  const addClient = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newClient: Client = {
-      id: `c${Date.now()}`,
-      name: form.name,
-      email: form.email,
-      goal: form.goal || "General fitness",
-      status: "Active",
-      lastVisit: "Today",
-      joinedAt: new Date().toISOString().slice(0, 10),
-      streak: 0,
-      plan: "Standard Monthly",
-      paymentStatus: "Paid",
-      dueDate: "—",
-    };
+    const newClient = await api<Client>("/clients", {
+      method: "POST",
+      body: JSON.stringify(form),
+    });
     setClients((prev) => [newClient, ...prev]);
     setForm({ name: "", email: "", goal: "" });
     setOpen(false);
@@ -92,7 +85,11 @@ function ClientsPage() {
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-3">
                       <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-primary text-xs font-semibold text-primary-foreground">
-                        {c.name.split(" ").map((n) => n[0]).slice(0, 2).join("")}
+                        {c.name
+                          .split(" ")
+                          .map((n) => n[0])
+                          .slice(0, 2)
+                          .join("")}
                       </span>
                       <div>
                         <p className="font-medium">{c.name}</p>
@@ -102,17 +99,37 @@ function ClientsPage() {
                   </td>
                   <td className="px-5 py-4 text-muted-foreground">{c.goal}</td>
                   <td className="px-5 py-4">
-                    <StatusBadge tone={c.status === "Active" ? "success" : "muted"}>{c.status}</StatusBadge>
+                    <StatusBadge tone={c.status === "Active" ? "success" : "muted"}>
+                      {c.status}
+                    </StatusBadge>
                   </td>
                   <td className="px-5 py-4 text-muted-foreground">{c.lastVisit}</td>
                   <td className="px-5 py-4">
                     <div className="flex justify-end gap-1">
-                      <button className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="View"><Eye className="h-4 w-4" /></button>
-                      <button className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Edit"><Pencil className="h-4 w-4" /></button>
+                      <button
+                        className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                        aria-label="View"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </button>
+                      <button
+                        className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                        aria-label="Edit"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
                       <button
                         onClick={() => {
-                          setClients((prev) => prev.filter((p) => p.id !== c.id));
-                          toast.success("Client removed.");
+                          api(`/clients/${c.id}`, { method: "DELETE" })
+                            .then(() => {
+                              setClients((prev) => prev.filter((p) => p.id !== c.id));
+                              toast.success("Client removed.");
+                            })
+                            .catch((err) =>
+                              toast.error(
+                                err instanceof Error ? err.message : "Unable to remove client",
+                              ),
+                            );
                         }}
                         className="rounded-md p-1.5 text-destructive hover:bg-destructive/10"
                         aria-label="Delete"
@@ -164,10 +181,17 @@ function ClientsPage() {
               />
             </div>
             <DialogFooter>
-              <button type="button" onClick={() => setOpen(false)} className="rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted">
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted"
+              >
                 Cancel
               </button>
-              <button type="submit" className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-card hover:bg-primary/90">
+              <button
+                type="submit"
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-card hover:bg-primary/90"
+              >
                 Add client
               </button>
             </DialogFooter>

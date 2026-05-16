@@ -2,7 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { CheckCircle2, Dumbbell, Flame } from "lucide-react";
 import { PageHeader } from "@/components/app-shell";
-import { mockWorkout } from "@/lib/mock-data";
 import {
   Dialog,
   DialogContent,
@@ -13,6 +12,9 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { api } from "@/lib/api";
+import { useApiResource } from "@/hooks/use-api-resource";
+import type { Workout } from "@/lib/live-data";
 
 export const Route = createFileRoute("/client/")({
   component: ClientWorkouts,
@@ -23,6 +25,12 @@ type Energy = "Low" | "Normal" | "High";
 type Issue = "No issue" | "Joint pain" | "Muscle soreness" | "Other";
 
 function ClientWorkouts() {
+  const { data: workout } = useApiResource<Workout>("/workouts/today", {
+    id: "",
+    name: "No workout assigned",
+    type: "Workout",
+    exercises: [],
+  });
   const [completed, setCompleted] = useState<Record<string, boolean>>({});
   const [activeId, setActiveId] = useState<string | null>(null);
   const [difficulty, setDifficulty] = useState<Difficulty>("Moderate");
@@ -41,15 +49,27 @@ function ClientWorkouts() {
     setNotes("");
   };
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (activeId) setCompleted((c) => ({ ...c, [activeId]: true }));
+    if (activeId) {
+      await api(`/workouts/exercises/${activeId}/feedback`, {
+        method: "POST",
+        body: JSON.stringify({
+          workoutId: workout.id,
+          difficulty,
+          energy,
+          issue,
+          notes: issue === "Other" ? `${otherIssue}${notes ? ` - ${notes}` : ""}` : notes,
+        }),
+      });
+      setCompleted((c) => ({ ...c, [activeId]: true }));
+    }
     toast.success("Feedback submitted. Great work today! 💪");
     close();
   };
 
   const doneCount = Object.values(completed).filter(Boolean).length;
-  const total = mockWorkout.exercises.length;
+  const total = workout.exercises.length;
   const pct = Math.round((doneCount / total) * 100);
 
   return (
@@ -62,8 +82,8 @@ function ClientWorkouts() {
       <div className="mb-6 rounded-2xl border border-border bg-gradient-primary p-6 text-primary-foreground shadow-card">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-xs uppercase tracking-wide opacity-90">{mockWorkout.type}</p>
-            <h2 className="mt-1 text-2xl font-semibold">{mockWorkout.name}</h2>
+            <p className="text-xs uppercase tracking-wide opacity-90">{workout.type}</p>
+            <h2 className="mt-1 text-2xl font-semibold">{workout.name}</h2>
             <p className="mt-1 text-sm opacity-90">{total} exercises · ~45 min</p>
           </div>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-foreground/20 px-3 py-1.5 text-sm font-semibold backdrop-blur">
@@ -73,16 +93,21 @@ function ClientWorkouts() {
         <div className="mt-5">
           <div className="flex items-center justify-between text-xs opacity-90">
             <span>Progress</span>
-            <span>{doneCount} / {total}</span>
+            <span>
+              {doneCount} / {total}
+            </span>
           </div>
           <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-primary-foreground/20">
-            <div className="h-full rounded-full bg-primary-foreground/90 transition-all" style={{ width: `${pct}%` }} />
+            <div
+              className="h-full rounded-full bg-primary-foreground/90 transition-all"
+              style={{ width: `${pct}%` }}
+            />
           </div>
         </div>
       </div>
 
       <ul className="space-y-3">
-        {mockWorkout.exercises.map((e) => {
+        {workout.exercises.map((e) => {
           const done = completed[e.id];
           return (
             <li
@@ -93,7 +118,12 @@ function ClientWorkouts() {
               )}
             >
               <div className="flex items-center gap-3">
-                <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", done ? "bg-success/15 text-success" : "bg-primary/10 text-primary")}>
+                <span
+                  className={cn(
+                    "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+                    done ? "bg-success/15 text-success" : "bg-primary/10 text-primary",
+                  )}
+                >
                   {done ? <CheckCircle2 className="h-5 w-5" /> : <Dumbbell className="h-5 w-5" />}
                 </span>
                 <div className="min-w-0">
@@ -124,7 +154,9 @@ function ClientWorkouts() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Quick session feedback</DialogTitle>
-            <DialogDescription>Takes 10 seconds. Helps your trainer adjust your plan.</DialogDescription>
+            <DialogDescription>
+              Takes 10 seconds. Helps your trainer adjust your plan.
+            </DialogDescription>
           </DialogHeader>
           <form onSubmit={submit} className="space-y-5">
             <SegmentField
@@ -173,7 +205,9 @@ function ClientWorkouts() {
               )}
             </div>
             <div>
-              <label className="text-sm font-medium">Notes <span className="font-normal text-muted-foreground">(optional)</span></label>
+              <label className="text-sm font-medium">
+                Notes <span className="font-normal text-muted-foreground">(optional)</span>
+              </label>
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}

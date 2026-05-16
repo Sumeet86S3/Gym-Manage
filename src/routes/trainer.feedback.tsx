@@ -3,10 +3,11 @@ import { useState } from "react";
 import { AlertTriangle, Battery, Wrench, MessageSquareHeart } from "lucide-react";
 import { PageHeader } from "@/components/app-shell";
 import { StatusBadge } from "@/components/status-badge";
-import { mockFeedback } from "@/lib/mock-data";
+import type { FeedbackEntry } from "@/lib/types";
 import { feedbackTone } from "@/lib/feedback-utils";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useApiResource } from "@/hooks/use-api-resource";
 
 export const Route = createFileRoute("/trainer/feedback")({
   component: FeedbackPage,
@@ -14,8 +15,12 @@ export const Route = createFileRoute("/trainer/feedback")({
 
 function FeedbackPage() {
   const [filter, setFilter] = useState<"All" | "Issues" | "Hard + Low" | "Normal">("All");
+  const { data: feedback } = useApiResource<FeedbackEntry[]>(
+    `/feedback?filter=${encodeURIComponent(filter)}`,
+    [],
+  );
 
-  const filtered = mockFeedback.filter((f) => {
+  const filtered = feedback.filter((f) => {
     const t = feedbackTone(f);
     if (filter === "All") return true;
     if (filter === "Issues") return t === "destructive";
@@ -36,7 +41,9 @@ function FeedbackPage() {
                 onClick={() => setFilter(f)}
                 className={cn(
                   "rounded-md px-3 py-1.5 text-xs font-medium transition",
-                  filter === f ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+                  filter === f
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-muted",
                 )}
               >
                 {f}
@@ -47,9 +54,24 @@ function FeedbackPage() {
       />
 
       <div className="mb-6 grid gap-3 md:grid-cols-3">
-        <SummaryCard icon={AlertTriangle} label="Reported issues" value={mockFeedback.filter((f) => feedbackTone(f) === "destructive").length} tone="destructive" />
-        <SummaryCard icon={Battery} label="Hard + low energy" value={mockFeedback.filter((f) => feedbackTone(f) === "warning").length} tone="warning" />
-        <SummaryCard icon={MessageSquareHeart} label="Normal sessions" value={mockFeedback.filter((f) => feedbackTone(f) === "success").length} tone="success" />
+        <SummaryCard
+          icon={AlertTriangle}
+          label="Reported issues"
+          value={feedback.filter((f) => feedbackTone(f) === "destructive").length}
+          tone="destructive"
+        />
+        <SummaryCard
+          icon={Battery}
+          label="Hard + low energy"
+          value={feedback.filter((f) => feedbackTone(f) === "warning").length}
+          tone="warning"
+        />
+        <SummaryCard
+          icon={MessageSquareHeart}
+          label="Normal sessions"
+          value={feedback.filter((f) => feedbackTone(f) === "success").length}
+          tone="success"
+        />
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -78,10 +100,22 @@ function FeedbackPage() {
               </header>
 
               <div className="mt-4 flex flex-wrap gap-1.5">
-                <StatusBadge tone={f.difficulty === "Hard" ? "destructive" : f.difficulty === "Moderate" ? "warning" : "success"}>
+                <StatusBadge
+                  tone={
+                    f.difficulty === "Hard"
+                      ? "destructive"
+                      : f.difficulty === "Moderate"
+                        ? "warning"
+                        : "success"
+                  }
+                >
                   Difficulty: {f.difficulty}
                 </StatusBadge>
-                <StatusBadge tone={f.energy === "Low" ? "destructive" : f.energy === "Normal" ? "info" : "success"}>
+                <StatusBadge
+                  tone={
+                    f.energy === "Low" ? "destructive" : f.energy === "Normal" ? "info" : "success"
+                  }
+                >
                   Energy: {f.energy}
                 </StatusBadge>
                 <StatusBadge tone={f.issue === "No issue" ? "success" : "destructive"}>
@@ -97,7 +131,11 @@ function FeedbackPage() {
 
               <div className="mt-4 flex items-center justify-between">
                 <span className="text-xs text-muted-foreground">
-                  {tone === "destructive" ? "🔴 Issue reported" : tone === "warning" ? "🟡 Needs attention" : "🟢 Looks good"}
+                  {tone === "destructive"
+                    ? "🔴 Issue reported"
+                    : tone === "warning"
+                      ? "🟡 Needs attention"
+                      : "🟢 Looks good"}
                 </span>
                 <button
                   onClick={() => toast.success("Workout modification flow opened (UI only).")}

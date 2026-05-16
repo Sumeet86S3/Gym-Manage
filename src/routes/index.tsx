@@ -70,8 +70,7 @@ function Navbar() {
   return (
     <header
       className={
-        "fixed inset-x-0 top-0 z-50 transition-all duration-300 " +
-        (scrolled ? "py-2" : "py-4")
+        "fixed inset-x-0 top-0 z-50 transition-all duration-300 " + (scrolled ? "py-2" : "py-4")
       }
     >
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4">
@@ -89,10 +88,18 @@ function Navbar() {
           </Link>
 
           <nav className="hidden items-center gap-7 text-sm font-medium text-muted-foreground md:flex">
-            <a href="#programs" className="story-link hover:text-foreground transition">Programs</a>
-            <a href="#transform" className="story-link hover:text-foreground transition">Results</a>
-            <a href="#testimonials" className="story-link hover:text-foreground transition">Stories</a>
-            <a href="#cta" className="story-link hover:text-foreground transition">Pricing</a>
+            <a href="#programs" className="story-link hover:text-foreground transition">
+              Programs
+            </a>
+            <a href="#transform" className="story-link hover:text-foreground transition">
+              Results
+            </a>
+            <a href="#testimonials" className="story-link hover:text-foreground transition">
+              Stories
+            </a>
+            <a href="#cta" className="story-link hover:text-foreground transition">
+              Pricing
+            </a>
           </nav>
 
           <div className="flex items-center gap-2">
@@ -144,8 +151,8 @@ function Hero() {
             <span className="text-gradient">Manage smarter.</span>
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-base text-muted-foreground md:text-lg">
-            FitSphere unifies admins, trainers and members into one beautifully designed
-            workspace — workouts, payments, progress and live feedback in real time.
+            FitSphere unifies admins, trainers and members into one beautifully designed workspace —
+            workouts, payments, progress and live feedback in real time.
           </p>
           <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link
@@ -164,9 +171,15 @@ function Hero() {
           </div>
 
           <div className="mt-10 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 text-primary" /> No credit card</span>
-            <span className="flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 text-primary" /> Setup in minutes</span>
-            <span className="flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 text-primary" /> Cancel anytime</span>
+            <span className="flex items-center gap-1.5">
+              <CheckCircle2 className="h-3.5 w-3.5 text-primary" /> No credit card
+            </span>
+            <span className="flex items-center gap-1.5">
+              <CheckCircle2 className="h-3.5 w-3.5 text-primary" /> Setup in minutes
+            </span>
+            <span className="flex items-center gap-1.5">
+              <CheckCircle2 className="h-3.5 w-3.5 text-primary" /> Cancel anytime
+            </span>
           </div>
         </div>
 
@@ -236,7 +249,9 @@ function Stats() {
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
               <s.icon className="h-5 w-5" />
             </span>
-            <p className="font-display text-3xl font-semibold tracking-tight md:text-4xl">{s.value}</p>
+            <p className="font-display text-3xl font-semibold tracking-tight md:text-4xl">
+              {s.value}
+            </p>
             <p className="text-sm text-muted-foreground">{s.label}</p>
           </div>
         ))}
@@ -274,13 +289,15 @@ function Programs() {
     <section id="programs" className="relative py-24 md:py-32">
       <div className="mx-auto max-w-6xl px-6">
         <div className="reveal mx-auto max-w-2xl text-center">
-          <span className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Programs</span>
+          <span className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
+            Programs
+          </span>
           <h2 className="mt-3 font-display text-4xl font-semibold tracking-tight md:text-5xl">
             Built for every kind of athlete
           </h2>
           <p className="mt-4 text-muted-foreground">
-            Trainers can deploy curated programs in seconds. Members get a plan that adapts to
-            their energy, schedule and goals.
+            Trainers can deploy curated programs in seconds. Members get a plan that adapts to their
+            energy, schedule and goals.
           </p>
         </div>
 
@@ -324,9 +341,21 @@ function Programs() {
 /* ---------- Transformations ---------- */
 function Transformations() {
   const items = [
-    { icon: ShieldCheck, title: "Admins", desc: "Approve trainers, monitor revenue and oversee the whole studio from one dashboard." },
-    { icon: UserCheck, title: "Trainers", desc: "Manage clients, attendance, payments and live feedback without spreadsheets." },
-    { icon: Dumbbell, title: "Members", desc: "See today's workout, log sessions and share daily feedback in seconds." },
+    {
+      icon: ShieldCheck,
+      title: "Admins",
+      desc: "Approve trainers, monitor revenue and oversee the whole studio from one dashboard.",
+    },
+    {
+      icon: UserCheck,
+      title: "Trainers",
+      desc: "Manage clients, attendance, payments and live feedback without spreadsheets.",
+    },
+    {
+      icon: Dumbbell,
+      title: "Members",
+      desc: "See today's workout, log sessions and share daily feedback in seconds.",
+    },
   ];
   return (
     <section id="transform" className="relative overflow-hidden py-24 md:py-32">
@@ -334,13 +363,15 @@ function Transformations() {
       <div className="mx-auto max-w-6xl px-6">
         <div className="grid items-center gap-12 md:grid-cols-2">
           <div className="reveal">
-            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">One platform · Three roles</span>
+            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
+              One platform · Three roles
+            </span>
             <h2 className="mt-3 font-display text-4xl font-semibold tracking-tight md:text-5xl">
               Real workflows, <span className="text-gradient">real results.</span>
             </h2>
             <p className="mt-5 text-muted-foreground">
-              FitSphere replaces the patchwork of WhatsApp groups, paper logs and clunky tools
-              with a single, role-aware workspace your whole studio will love.
+              FitSphere replaces the patchwork of WhatsApp groups, paper logs and clunky tools with
+              a single, role-aware workspace your whole studio will love.
             </p>
             <div className="mt-8 space-y-4">
               {items.map((f, i) => (
@@ -363,7 +394,12 @@ function Transformations() {
 
           <div className="reveal relative">
             <div className="relative overflow-hidden rounded-3xl border border-border shadow-elevated">
-              <img src={strengthImg} alt="Trainer" className="h-[520px] w-full object-cover" loading="lazy" />
+              <img
+                src={strengthImg}
+                alt="Trainer"
+                className="h-[520px] w-full object-cover"
+                loading="lazy"
+              />
               <div className="absolute inset-0 bg-gradient-to-t from-background via-background/30 to-transparent" />
               <div className="absolute bottom-6 left-6 right-6 rounded-2xl glass-dark p-5 text-white">
                 <div className="flex items-center justify-between">
@@ -371,7 +407,9 @@ function Transformations() {
                     <p className="text-xs opacity-80">Member transformation</p>
                     <p className="font-display text-2xl font-semibold">−18 kg in 6 months</p>
                   </div>
-                  <span className="rounded-full bg-primary/30 px-3 py-1 text-xs font-medium">Verified</span>
+                  <span className="rounded-full bg-primary/30 px-3 py-1 text-xs font-medium">
+                    Verified
+                  </span>
                 </div>
               </div>
             </div>
@@ -389,15 +427,29 @@ function Transformations() {
 /* ---------- Testimonials ---------- */
 function Testimonials() {
   const items = [
-    { name: "Sam Patel", role: "Lead Trainer · Iron & Oak", quote: "Our studio runs 3× smoother since switching. Onboarding new clients takes minutes." },
-    { name: "Priya Shah", role: "Member · Pune", quote: "Love seeing my plan, payments and feedback in one place. The app feels premium." },
-    { name: "Rohit Verma", role: "Studio Owner · Mumbai", quote: "Revenue dashboards finally make sense. Trainer approvals are a single tap." },
+    {
+      name: "Sam Patel",
+      role: "Lead Trainer · Iron & Oak",
+      quote: "Our studio runs 3× smoother since switching. Onboarding new clients takes minutes.",
+    },
+    {
+      name: "Priya Shah",
+      role: "Member · Pune",
+      quote: "Love seeing my plan, payments and feedback in one place. The app feels premium.",
+    },
+    {
+      name: "Rohit Verma",
+      role: "Studio Owner · Mumbai",
+      quote: "Revenue dashboards finally make sense. Trainer approvals are a single tap.",
+    },
   ];
   return (
     <section id="testimonials" className="py-24 md:py-32">
       <div className="mx-auto max-w-6xl px-6">
         <div className="reveal mx-auto max-w-2xl text-center">
-          <span className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Loved by studios</span>
+          <span className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
+            Loved by studios
+          </span>
           <h2 className="mt-3 font-display text-4xl font-semibold tracking-tight md:text-5xl">
             Trusted by trainers worldwide
           </h2>
@@ -417,7 +469,10 @@ function Testimonials() {
               <blockquote className="mt-4 text-base leading-relaxed">"{t.quote}"</blockquote>
               <figcaption className="mt-6 flex items-center gap-3">
                 <span className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-primary text-sm font-semibold text-primary-foreground">
-                  {t.name.split(" ").map((n) => n[0]).join("")}
+                  {t.name
+                    .split(" ")
+                    .map((n) => n[0])
+                    .join("")}
                 </span>
                 <div>
                   <p className="text-sm font-semibold">{t.name}</p>
@@ -437,7 +492,12 @@ function CTA() {
   return (
     <section id="cta" className="relative overflow-hidden py-24 md:py-32">
       <div className="absolute inset-0 -z-10">
-        <img src={heroImg} alt="" className="h-full w-full object-cover opacity-30" loading="lazy" />
+        <img
+          src={heroImg}
+          alt=""
+          className="h-full w-full object-cover opacity-30"
+          loading="lazy"
+        />
         <div className="absolute inset-0 bg-gradient-to-b from-background/85 via-background/90 to-background" />
       </div>
       <div className="mx-auto max-w-4xl px-6">
@@ -484,8 +544,8 @@ function Footer() {
               <span className="font-display text-lg font-semibold">FitSphere</span>
             </div>
             <p className="mt-4 max-w-sm text-sm text-muted-foreground">
-              The all-in-one operating system for modern fitness studios. Built for trainers,
-              loved by members.
+              The all-in-one operating system for modern fitness studios. Built for trainers, loved
+              by members.
             </p>
             <div className="mt-5 flex items-center gap-2">
               {[Instagram, Twitter, Youtube].map((Icon, i) => (
@@ -506,8 +566,12 @@ function Footer() {
         <div className="mt-10 flex flex-col items-center justify-between gap-3 border-t border-border pt-6 text-xs text-muted-foreground md:flex-row">
           <p>© 2026 FitSphere. All rights reserved.</p>
           <div className="flex gap-5">
-            <a href="#" className="hover:text-foreground transition">Privacy</a>
-            <a href="#" className="hover:text-foreground transition">Terms</a>
+            <a href="#" className="hover:text-foreground transition">
+              Privacy
+            </a>
+            <a href="#" className="hover:text-foreground transition">
+              Terms
+            </a>
           </div>
         </div>
       </div>
@@ -522,7 +586,9 @@ function FooterCol({ title, links }: { title: string; links: string[] }) {
       <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
         {links.map((l) => (
           <li key={l}>
-            <a href="#" className="story-link transition hover:text-foreground">{l}</a>
+            <a href="#" className="story-link transition hover:text-foreground">
+              {l}
+            </a>
           </li>
         ))}
       </ul>

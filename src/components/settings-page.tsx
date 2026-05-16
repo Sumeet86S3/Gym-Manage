@@ -52,7 +52,9 @@ export function SettingsPage() {
           className="rounded-2xl border border-border bg-card p-6 shadow-card"
         >
           <h3 className="text-base font-semibold">Password</h3>
-          <p className="text-sm text-muted-foreground">Change your password regularly to keep your account safe.</p>
+          <p className="text-sm text-muted-foreground">
+            Change your password regularly to keep your account safe.
+          </p>
           <div className="mt-5 space-y-4">
             {["Current password", "New password", "Confirm new password"].map((l) => (
               <div key={l}>

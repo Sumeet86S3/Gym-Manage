@@ -15,8 +15,10 @@ import {
 import { toast } from "sonner";
 import { PageHeader } from "@/components/app-shell";
 import { MealTypeBadge } from "@/components/meal/meal-type-badge";
-import { mockMeals, type MealEntry, type MealType } from "@/lib/mock-data";
+import type { MealEntry, MealType } from "@/lib/types";
 import { useAuth } from "@/lib/auth";
+import { api } from "@/lib/api";
+import { useApiResource } from "@/hooks/use-api-resource";
 import {
   Select,
   SelectContent,
@@ -39,6 +41,7 @@ const mealOptions: { value: MealType; icon: typeof Coffee; hint: string }[] = [
 
 function ClientMealsPage() {
   const { user } = useAuth();
+  const { data: loadedMeals, setData: setLoadedMeals } = useApiResource<MealEntry[]>("/meals", []);
   const fileRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
   const [type, setType] = useState<MealType>("Breakfast");
@@ -46,9 +49,8 @@ function ClientMealsPage() {
   const [preview, setPreview] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [meals, setMeals] = useState<MealEntry[]>(
-    mockMeals.filter((m) => m.clientName === user?.name || m.clientId === "c1").slice(0, 4),
-  );
+  const meals = loadedMeals;
+  const setMeals = setLoadedMeals;
 
   const handleFile = (file: File | null | undefined) => {
     if (!file) return;
@@ -81,15 +83,31 @@ function ClientMealsPage() {
     setSubmitting(true);
     await new Promise((r) => setTimeout(r, 900));
     const now = new Date();
+    const saved = await api<{
+      id: string;
+      clientId: string;
+      type: MealType;
+      note?: string;
+      imageUrl: string;
+      loggedAt: string;
+    }>("/meals", {
+      method: "POST",
+      body: JSON.stringify({
+        type,
+        note: note.trim() || undefined,
+        imageUrl: preview,
+        loggedAt: now.toISOString(),
+      }),
+    });
     const entry: MealEntry = {
-      id: `m-${Date.now()}`,
-      clientId: "me",
+      id: saved.id,
+      clientId: saved.clientId,
       clientName: user?.name ?? "You",
-      type,
+      type: saved.type,
       time: now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
-      timestamp: now.getTime(),
-      note: note.trim() || undefined,
-      image: preview,
+      timestamp: new Date(saved.loggedAt).getTime(),
+      note: saved.note,
+      image: saved.imageUrl,
     };
     setMeals((m) => [entry, ...m]);
     setSubmitting(false);
@@ -289,9 +307,7 @@ function MealHistoryCard({ meal }: { meal: MealEntry }) {
           <Clock className="h-3.5 w-3.5" />
           {meal.time}
         </div>
-        {meal.note && (
-          <p className="line-clamp-2 text-sm text-foreground">{meal.note}</p>
-        )}
+        {meal.note && <p className="line-clamp-2 text-sm text-foreground">{meal.note}</p>}
       </div>
     </article>
   );

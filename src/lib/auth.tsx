@@ -1,62 +1,71 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import type { UserRole } from "./mock-data";
+import type { UserRole } from "./types";
+import { api, setAccessToken } from "./api";
 
 interface AuthUser {
   id: string;
+  profileId?: string | null;
   name: string;
   email: string;
   role: UserRole;
   approved: boolean;
+  approvalStatus?: "Pending" | "Approved" | "Rejected";
 }
 
 interface AuthContextValue {
   user: AuthUser | null;
-  login: (email: string, password: string, role: UserRole) => void;
-  signupTrainer: (name: string, email: string, password: string) => void;
+  loading: boolean;
+  login: (email: string, password: string, role: UserRole) => Promise<AuthUser>;
+  signupTrainer: (name: string, email: string, password: string) => Promise<AuthUser>;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const STORAGE_KEY = "fitstudio_demo_user";
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      try {
-        setUser(JSON.parse(raw));
-      } catch {
-        /* ignore */
-      }
-    }
+    api<{ user: AuthUser }>("/auth/me")
+      .then((data) => setUser(normalizeUser(data.user)))
+      .catch(() => {
+        setAccessToken(null);
+        setUser(null);
+      })
+      .finally(() => setLoading(false));
   }, []);
 
-  const persist = (u: AuthUser | null) => {
-    setUser(u);
-    if (typeof window !== "undefined") {
-      if (u) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(u));
-      else window.localStorage.removeItem(STORAGE_KEY);
-    }
+  const login = async (email: string, password: string, role: UserRole) => {
+    const data = await api<{ user: AuthUser; accessToken: string }>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password, role }),
+    });
+    setAccessToken(data.accessToken);
+    const nextUser = normalizeUser(data.user);
+    setUser(nextUser);
+    return nextUser;
   };
 
-  const login = (email: string, _password: string, role: UserRole) => {
-    const name =
-      role === "admin" ? "Avery Stone" : role === "trainer" ? "Alex Rivera" : "Olivia Bennett";
-    persist({ id: `${role}-1`, name, email, role, approved: true });
+  const signupTrainer = async (name: string, email: string, password: string) => {
+    const data = await api<{ user: AuthUser; accessToken: string }>("/auth/trainer-signup", {
+      method: "POST",
+      body: JSON.stringify({ name, email, password }),
+    });
+    setAccessToken(data.accessToken);
+    const nextUser = normalizeUser(data.user);
+    setUser(nextUser);
+    return nextUser;
   };
 
-  const signupTrainer = (name: string, email: string, _password: string) => {
-    persist({ id: "trainer-pending", name, email, role: "trainer", approved: false });
+  const logout = () => {
+    api("/auth/logout", { method: "POST" }).catch(() => undefined);
+    setAccessToken(null);
+    setUser(null);
   };
-
-  const logout = () => persist(null);
 
   return (
-    <AuthContext.Provider value={{ user, login, signupTrainer, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, signupTrainer, logout }}>
       {children}
     </AuthContext.Provider>
   );
@@ -66,4 +75,11 @@ export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth must be used inside AuthProvider");
   return ctx;
+}
+
+function normalizeUser(user: AuthUser): AuthUser {
+  return {
+    ...user,
+    approved: user.approved ?? user.approvalStatus === "Approved",
+  };
 }

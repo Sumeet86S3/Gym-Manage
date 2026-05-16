@@ -1,12 +1,28 @@
 import { Coffee, Salad, Soup, Cookie } from "lucide-react";
-import type { MealType } from "@/lib/mock-data";
+import type { MealType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const config: Record<MealType, { icon: typeof Coffee; cls: string; dot: string }> = {
-  Breakfast: { icon: Coffee, cls: "bg-orange-500/15 text-orange-600 dark:text-orange-400 border-orange-500/25", dot: "bg-orange-500" },
-  Lunch: { icon: Salad, cls: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/25", dot: "bg-emerald-500" },
-  Dinner: { icon: Soup, cls: "bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/25", dot: "bg-blue-500" },
-  Snacks: { icon: Cookie, cls: "bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/25", dot: "bg-purple-500" },
+  Breakfast: {
+    icon: Coffee,
+    cls: "bg-orange-500/15 text-orange-600 dark:text-orange-400 border-orange-500/25",
+    dot: "bg-orange-500",
+  },
+  Lunch: {
+    icon: Salad,
+    cls: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/25",
+    dot: "bg-emerald-500",
+  },
+  Dinner: {
+    icon: Soup,
+    cls: "bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/25",
+    dot: "bg-blue-500",
+  },
+  Snacks: {
+    icon: Cookie,
+    cls: "bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/25",
+    dot: "bg-purple-500",
+  },
 };
 
 export function MealTypeBadge({ type, size = "sm" }: { type: MealType; size?: "sm" | "md" }) {

@@ -32,14 +32,31 @@ export const Route = createRootRoute({
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "FitSphere — Modern Fitness Studio Management" },
-      { name: "description", content: "Role-based fitness studio management for admins, trainers, and clients." },
+      {
+        name: "description",
+        content: "Role-based fitness studio management for admins, trainers, and clients.",
+      },
       { property: "og:title", content: "FitSphere — Modern Fitness Studio Management" },
-      { property: "og:description", content: "Role-based fitness studio management for admins, trainers, and clients." },
+      {
+        property: "og:description",
+        content: "Role-based fitness studio management for admins, trainers, and clients.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:title", content: "FitSphere — Modern Fitness Studio Management" },
-      { name: "twitter:description", content: "Role-based fitness studio management for admins, trainers, and clients." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/75f14fe6-454e-4f11-b9a3-1740304b3122/id-preview-5a28071f--8f306edc-731c-4efe-8a4a-78853040fdf0.lovable.app-1777203153030.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/75f14fe6-454e-4f11-b9a3-1740304b3122/id-preview-5a28071f--8f306edc-731c-4efe-8a4a-78853040fdf0.lovable.app-1777203153030.png" },
+      {
+        name: "twitter:description",
+        content: "Role-based fitness studio management for admins, trainers, and clients.",
+      },
+      {
+        property: "og:image",
+        content:
+          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/75f14fe6-454e-4f11-b9a3-1740304b3122/id-preview-5a28071f--8f306edc-731c-4efe-8a4a-78853040fdf0.lovable.app-1777203153030.png",
+      },
+      {
+        name: "twitter:image",
+        content:
+          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/75f14fe6-454e-4f11-b9a3-1740304b3122/id-preview-5a28071f--8f306edc-731c-4efe-8a4a-78853040fdf0.lovable.app-1777203153030.png",
+      },
       { name: "twitter:card", content: "summary_large_image" },
     ],
     links: [

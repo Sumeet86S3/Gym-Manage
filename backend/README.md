@@ -1,84 +1,174 @@
 # FitSphere Backend
 
-Dependency-free Node REST API for the FitSphere frontend.
+Production-grade Express API for the FitSphere SaaS app.
+
+## Stack
+
+- Node.js + Express.js
+- Drizzle ORM
+- Turso/libSQL
+- JWT access tokens + refresh-token cookies
+- bcrypt password hashing
+- Zod validation
+- Helmet, CORS, express-rate-limit
+- Pino structured logging
+
+## Folder Structure
+
+```text
+backend/
+├── src/
+│   ├── config/
+│   │   ├── db.js
+│   │   ├── env.js
+│   │   └── logger.js
+│   ├── db/
+│   │   └── schema.js
+│   ├── modules/
+│   │   ├── auth/
+│   │   ├── users/
+│   │   ├── trainers/
+│   │   ├── clients/
+│   │   ├── workouts/
+│   │   ├── meals/
+│   │   ├── attendance/
+│   │   ├── payments/
+│   │   ├── goals/
+│   │   ├── measurements/
+│   │   ├── feedback/
+│   │   └── notifications/
+│   ├── middleware/
+│   ├── routes/
+│   ├── utils/
+│   ├── app.js
+│   └── server.js
+├── drizzle/
+│   └── migrations/
+├── scripts/
+│   └── seed.js
+├── drizzle.config.js
+├── package.json
+└── .env.example
+```
+
+Each feature module owns its route, controller, service, and validation schema.
+
+## Install
+
+```bash
+cd backend
+npm install
+```
+
+## Environment
+
+```bash
+cp .env.example .env
+```
+
+Set:
+
+```env
+TURSO_DATABASE_URL=libsql://your-db.turso.io
+TURSO_AUTH_TOKEN=your-token
+JWT_ACCESS_SECRET=replace-with-at-least-32-chars
+JWT_REFRESH_SECRET=replace-with-at-least-32-chars
+```
+
+## Turso Setup
+
+```bash
+turso db create fitsphere
+turso db show fitsphere --url
+turso db tokens create fitsphere
+```
+
+Put the URL and token in `.env`.
+
+## Migrations
+
+```bash
+npm run db:generate
+npm run db:migrate
+```
+
+For quick development sync:
+
+```bash
+npm run db:push
+```
+
+## Seed
+
+```bash
+npm run db:seed
+```
+
+Demo credentials:
+
+```text
+admin@fitsphere.com / password123
+trainer@fitsphere.com / password123
+client@fitsphere.com / password123
+```
 
 ## Run
 
 ```bash
-npm run backend
+npm run dev
 ```
 
-The API starts on `http://localhost:4000` by default. Override with:
+API base URL:
 
-```bash
-PORT=5000 npm run backend
+```text
+http://localhost:4000/api/v1
 ```
 
-On first run it creates `backend/data/db.json` with seeded demo data.
-
-## Demo Accounts
-
-All seeded accounts use password `password123`.
-
-| Role | Email |
-| --- | --- |
-| Admin | `admin@fitsphere.com` |
-| Trainer | `trainer@fitsphere.com` |
-| Client | `client@fitsphere.com` |
-
-## Auth
-
-Send the returned token on protected routes:
-
-```http
-Authorization: Bearer <token>
-```
-
-## Main Routes
+## API Surface
 
 ### Auth
 
-- `POST /api/auth/login`
-- `POST /api/auth/trainer-signup`
-- `GET /api/auth/me`
-- `PATCH /api/users/me`
-- `PATCH /api/users/me/password`
+- `POST /api/v1/auth/login`
+- `POST /api/v1/auth/trainer-signup`
+- `POST /api/v1/auth/refresh`
+- `POST /api/v1/auth/logout`
+- `GET /api/v1/auth/me`
 
-### Admin
+### Core
 
-- `GET /api/admin/dashboard`
-- `GET /api/admin/trainers?status=Pending`
-- `PATCH /api/admin/trainers/:id/status`
-- `GET /api/admin/reports`
+- `GET /api/v1/users`
+- `PATCH /api/v1/users/me`
+- `PATCH /api/v1/users/me/password`
+- `GET /api/v1/trainers`
+- `PATCH /api/v1/trainers/:id/status`
+- `GET /api/v1/clients`
+- `POST /api/v1/clients`
+- `PATCH /api/v1/clients/:id`
+- `DELETE /api/v1/clients/:id`
+- `GET /api/v1/workouts`
+- `POST /api/v1/workouts`
+- `GET /api/v1/workouts/today`
+- `POST /api/v1/workouts/exercises/:exerciseId/feedback`
+- `GET /api/v1/feedback`
+- `GET /api/v1/meals`
+- `POST /api/v1/meals`
+- `GET /api/v1/attendance`
+- `POST /api/v1/attendance`
+- `GET /api/v1/payments`
+- `POST /api/v1/payments`
+- `GET /api/v1/goals`
+- `POST /api/v1/goals`
+- `GET /api/v1/measurements`
+- `POST /api/v1/measurements`
+- `GET /api/v1/notifications`
+- `PATCH /api/v1/notifications/:id/read`
 
-### Trainer
+## Architecture Notes
 
-- `GET /api/trainer/dashboard`
-- `GET /api/trainer/clients`
-- `POST /api/trainer/clients`
-- `PATCH /api/trainer/clients/:id`
-- `DELETE /api/trainer/clients/:id`
-- `GET /api/trainer/attendance`
-- `POST /api/trainer/attendance`
-- `GET /api/trainer/workouts`
-- `POST /api/trainer/workouts`
-- `GET /api/trainer/feedback`
-- `GET /api/trainer/meals`
-- `GET /api/trainer/measurements`
-- `POST /api/trainer/measurements`
-- `GET /api/trainer/goals`
-- `GET /api/trainer/payments`
-
-### Client
-
-- `GET /api/client/workout`
-- `POST /api/client/workout/:exerciseId/feedback`
-- `GET /api/client/meals`
-- `POST /api/client/meals`
-- `GET /api/client/progress`
-- `GET /api/client/payments`
-- `GET /api/client/goals`
-
-## Notes
-
-This is a local-first backend meant to replace the current mock data cleanly. For production, move `backend/data/db.json` to PostgreSQL or another real database, set a strong `JWT_SECRET`, and store meal images in Cloudflare R2, S3, or Cloudinary.
+- Controllers are thin and only translate HTTP to service calls.
+- Services own business logic and database operations.
+- Zod validates body, params, and query before controllers run.
+- `authenticate` loads the current user from JWT.
+- `authorize` enforces role-based access and trainer approval.
+- Errors flow through one global error handler.
+- Responses use one consistent `{ success, message, data }` envelope.

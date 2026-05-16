@@ -1,32 +1,51 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader } from "@/components/app-shell";
 import { StatusBadge } from "@/components/status-badge";
+import { useApiResource } from "@/hooks/use-api-resource";
+import { formatDateLabel, toCurrency } from "@/lib/api";
+import type { PaymentRecord } from "@/lib/live-data";
 
 export const Route = createFileRoute("/client/payments")({
   component: ClientPayments,
 });
 
-const history = [
-  { id: "1", plan: "Premium Quarterly", amount: 19999, date: "Jan 10, 2025", status: "Paid" as const, due: "—" },
-  { id: "2", plan: "Premium Quarterly", amount: 19999, date: "Apr 10, 2025", status: "Paid" as const, due: "—" },
-  { id: "3", plan: "Premium Quarterly", amount: 19999, date: "Jul 10, 2025", status: "Due" as const, due: "Jul 10, 2025" },
-];
-
 function ClientPayments() {
+  const { data: history } = useApiResource<PaymentRecord[]>("/payments", []);
+  const active = history[0];
+
   return (
     <div>
-      <PageHeader title="Payments" description="Your plan, billing history and upcoming payments." />
+      <PageHeader
+        title="Payments"
+        description="Your plan, billing history and upcoming payments."
+      />
 
       <div className="mb-6 rounded-2xl border border-border bg-card p-6 shadow-card">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Active plan</p>
-            <h2 className="mt-1 text-2xl font-semibold">Premium Quarterly</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Renews on Jul 10, 2025</p>
+            <h2 className="mt-1 text-2xl font-semibold">{active?.plan ?? "No active plan"}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Renews on {formatDateLabel(active?.dueDate)}
+            </p>
           </div>
           <div className="text-right">
-            <p className="text-3xl font-semibold">₹19,999<span className="text-sm font-medium text-muted-foreground">/quarter</span></p>
-            <StatusBadge tone="success" className="mt-2">Active</StatusBadge>
+            <p className="text-3xl font-semibold">
+              {active ? toCurrency(active.amount) : "₹0"}
+              <span className="text-sm font-medium text-muted-foreground">/plan</span>
+            </p>
+            <StatusBadge
+              tone={
+                active?.status === "Overdue"
+                  ? "destructive"
+                  : active?.status === "Due"
+                    ? "warning"
+                    : "success"
+              }
+              className="mt-2"
+            >
+              {active?.status ?? "Inactive"}
+            </StatusBadge>
           </div>
         </div>
       </div>
@@ -47,12 +66,24 @@ function ClientPayments() {
               {history.map((p) => (
                 <tr key={p.id} className="hover:bg-muted/30">
                   <td className="px-5 py-4 font-medium">{p.plan}</td>
-                  <td className="px-5 py-4 text-muted-foreground">{p.date}</td>
-                  <td className="px-5 py-4">
-                    <StatusBadge tone={p.status === "Paid" ? "success" : "warning"}>{p.status}</StatusBadge>
+                  <td className="px-5 py-4 text-muted-foreground">
+                    {formatDateLabel(p.paidAt ?? p.createdAt)}
                   </td>
-                  <td className="px-5 py-4 text-muted-foreground">{p.due}</td>
-                  <td className="px-5 py-4 text-right font-semibold">₹{p.amount.toLocaleString("en-IN")}</td>
+                  <td className="px-5 py-4">
+                    <StatusBadge
+                      tone={
+                        p.status === "Paid"
+                          ? "success"
+                          : p.status === "Due"
+                            ? "warning"
+                            : "destructive"
+                      }
+                    >
+                      {p.status}
+                    </StatusBadge>
+                  </td>
+                  <td className="px-5 py-4 text-muted-foreground">{formatDateLabel(p.dueDate)}</td>
+                  <td className="px-5 py-4 text-right font-semibold">{toCurrency(p.amount)}</td>
                 </tr>
               ))}
             </tbody>

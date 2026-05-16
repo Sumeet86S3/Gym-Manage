@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Activity, ShieldCheck, UserCheck, Dumbbell, ArrowRight } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { ThemeToggle } from "@/lib/theme";
-import type { UserRole } from "@/lib/mock-data";
+import type { UserRole } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import authBg from "@/assets/auth-bg.jpg";
 
@@ -23,19 +23,42 @@ function LoginPage() {
   const [role, setRole] = useState<UserRole>("trainer");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    login(email || roles.find((r) => r.id === role)!.demoEmail, password, role);
-    const target = role === "admin" ? "/admin" : role === "trainer" ? "/trainer" : "/client";
-    navigate({ to: target });
+    setError("");
+    setSubmitting(true);
+    try {
+      const user = await login(
+        email || roles.find((r) => r.id === role)!.demoEmail,
+        password,
+        role,
+      );
+      if (user.role === "trainer" && !user.approved) {
+        navigate({ to: "/signup" });
+        return;
+      }
+      const target =
+        user.role === "admin" ? "/admin" : user.role === "trainer" ? "/trainer" : "/client";
+      navigate({ to: target });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to sign in");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
     <div className="relative min-h-screen overflow-hidden">
       {/* Background */}
       <div className="absolute inset-0 -z-10">
-        <img src={authBg} alt="" className="h-full w-full object-cover opacity-60 dark:opacity-70" />
+        <img
+          src={authBg}
+          alt=""
+          className="h-full w-full object-cover opacity-60 dark:opacity-70"
+        />
         <div className="absolute inset-0 bg-gradient-to-br from-background/70 via-background/85 to-background" />
         <div className="absolute inset-0 bg-grid opacity-50" />
       </div>
@@ -56,7 +79,9 @@ function LoginPage() {
             <span className="inline-flex items-center rounded-full bg-primary/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-primary">
               Welcome back
             </span>
-            <h1 className="mt-4 font-display text-3xl font-semibold tracking-tight">Sign in to FitSphere</h1>
+            <h1 className="mt-4 font-display text-3xl font-semibold tracking-tight">
+              Sign in to FitSphere
+            </h1>
             <p className="mt-1.5 text-sm text-muted-foreground">Choose your role to continue.</p>
 
             <div className="mt-6 grid grid-cols-3 gap-2">
@@ -91,7 +116,10 @@ function LoginPage() {
               <Field
                 label="Password"
                 right={
-                  <button type="button" className="text-xs font-medium text-primary hover:underline">
+                  <button
+                    type="button"
+                    className="text-xs font-medium text-primary hover:underline"
+                  >
                     Forgot?
                   </button>
                 }
@@ -106,12 +134,20 @@ function LoginPage() {
               </Field>
               <button
                 type="submit"
+                disabled={submitting}
                 className="btn-glow group flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground"
               >
-                Sign in as {roles.find((r) => r.id === role)!.label}
+                {submitting
+                  ? "Signing in..."
+                  : `Sign in as ${roles.find((r) => r.id === role)!.label}`}
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
               </button>
             </form>
+            {error && (
+              <p className="mt-3 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {error}
+              </p>
+            )}
 
             <p className="mt-6 text-center text-sm text-muted-foreground">
               New trainer?{" "}
@@ -120,7 +156,7 @@ function LoginPage() {
               </Link>
             </p>
             <p className="mt-3 text-center text-[11px] text-muted-foreground">
-              Demo mode — any email/password works. Pick a role above.
+              Demo accounts use password: password123.
             </p>
           </div>
         </div>

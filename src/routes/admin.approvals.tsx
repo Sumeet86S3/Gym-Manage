@@ -3,21 +3,27 @@ import { useState } from "react";
 import { Check, X } from "lucide-react";
 import { PageHeader } from "@/components/app-shell";
 import { StatusBadge } from "@/components/status-badge";
-import { mockTrainers, type Trainer } from "@/lib/mock-data";
+import type { Trainer } from "@/lib/types";
 import { toast } from "sonner";
+import { api } from "@/lib/api";
+import { useApiResource } from "@/hooks/use-api-resource";
 
 export const Route = createFileRoute("/admin/approvals")({
   component: ApprovalsPage,
 });
 
 function ApprovalsPage() {
-  const [trainers, setTrainers] = useState<Trainer[]>(mockTrainers);
+  const { data: trainers, setData: setTrainers } = useApiResource<Trainer[]>("/trainers", []);
   const [filter, setFilter] = useState<"All" | "Pending" | "Approved" | "Rejected">("All");
 
   const filtered = filter === "All" ? trainers : trainers.filter((t) => t.status === filter);
 
-  const update = (id: string, status: Trainer["status"]) => {
-    setTrainers((prev) => prev.map((t) => (t.id === id ? { ...t, status } : t)));
+  const update = async (id: string, status: Trainer["status"]) => {
+    const updated = await api<Trainer>(`/trainers/${id}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    });
+    setTrainers((prev) => prev.map((t) => (t.id === id ? { ...t, ...updated } : t)));
     toast.success(`Trainer ${status.toLowerCase()}.`);
   };
 
@@ -33,7 +39,9 @@ function ApprovalsPage() {
                 key={f}
                 onClick={() => setFilter(f)}
                 className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
-                  filter === f ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+                  filter === f
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-muted"
                 }`}
               >
                 {f}
@@ -61,7 +69,11 @@ function ApprovalsPage() {
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-3">
                       <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-primary text-xs font-semibold text-primary-foreground">
-                        {t.name.split(" ").map((n) => n[0]).slice(0, 2).join("")}
+                        {t.name
+                          .split(" ")
+                          .map((n) => n[0])
+                          .slice(0, 2)
+                          .join("")}
                       </span>
                       <span className="font-medium text-foreground">{t.name}</span>
                     </div>
@@ -69,7 +81,15 @@ function ApprovalsPage() {
                   <td className="px-5 py-4 text-muted-foreground">{t.email}</td>
                   <td className="px-5 py-4 text-muted-foreground">{t.joinedAt}</td>
                   <td className="px-5 py-4">
-                    <StatusBadge tone={t.status === "Approved" ? "success" : t.status === "Pending" ? "warning" : "destructive"}>
+                    <StatusBadge
+                      tone={
+                        t.status === "Approved"
+                          ? "success"
+                          : t.status === "Pending"
+                            ? "warning"
+                            : "destructive"
+                      }
+                    >
                       {t.status}
                     </StatusBadge>
                   </td>

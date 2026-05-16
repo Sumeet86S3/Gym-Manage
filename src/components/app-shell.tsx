@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { ThemeToggle } from "@/lib/theme";
-import { notifications } from "@/lib/mock-data";
+import { api } from "@/lib/api";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -74,23 +74,22 @@ const clientNav: NavItem[] = [
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const { user, logout } = useAuth();
+  const { user, loading, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
-    if (!user) navigate({ to: "/login" });
-  }, [user, navigate]);
+    if (!loading && !user) navigate({ to: "/login" });
+  }, [user, loading, navigate]);
 
   useEffect(() => {
     setMobileOpen(false);
   }, [location.pathname]);
 
-  if (!user) return null;
+  if (loading || !user) return null;
 
-  const nav =
-    user.role === "admin" ? adminNav : user.role === "trainer" ? trainerNav : clientNav;
+  const nav = user.role === "admin" ? adminNav : user.role === "trainer" ? trainerNav : clientNav;
 
   const roleLabel =
     user.role === "admin" ? "Admin" : user.role === "trainer" ? "Trainer" : "Member";
@@ -143,7 +142,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             </button>
             <div>
               <p className="text-xs text-muted-foreground">{roleLabel} workspace</p>
-              <p className="text-sm font-medium text-foreground">Welcome back, {user.name.split(" ")[0]}</p>
+              <p className="text-sm font-medium text-foreground">
+                Welcome back, {user.name.split(" ")[0]}
+              </p>
             </div>
           </div>
 
@@ -154,11 +155,19 @@ export function AppShell({ children }: { children: ReactNode }) {
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-2 rounded-full border border-border bg-card py-1 pl-1 pr-3 text-sm shadow-soft hover:bg-muted">
                   <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-primary text-xs font-semibold text-primary-foreground">
-                    {user.name.split(" ").map((n) => n[0]).slice(0, 2).join("")}
+                    {user.name
+                      .split(" ")
+                      .map((n) => n[0])
+                      .slice(0, 2)
+                      .join("")}
                   </span>
                   <span className="hidden text-left sm:block">
-                    <span className="block text-sm font-medium leading-tight text-foreground">{user.name}</span>
-                    <span className="block text-xs leading-tight text-muted-foreground">{user.email}</span>
+                    <span className="block text-sm font-medium leading-tight text-foreground">
+                      {user.name}
+                    </span>
+                    <span className="block text-xs leading-tight text-muted-foreground">
+                      {user.email}
+                    </span>
                   </span>
                 </button>
               </DropdownMenuTrigger>
@@ -185,7 +194,9 @@ function Brand() {
       <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-primary shadow-glow transition-transform group-hover:scale-110">
         <Activity className="h-5 w-5 text-primary-foreground" />
       </span>
-      <span className="font-display text-base font-semibold tracking-tight text-sidebar-foreground">FitSphere</span>
+      <span className="font-display text-base font-semibold tracking-tight text-sidebar-foreground">
+        FitSphere
+      </span>
     </Link>
   );
 }
@@ -216,7 +227,10 @@ function SidebarInner({
           <Link
             key={item.to}
             to={item.to}
-            activeOptions={{ exact: item.to.endsWith("/admin") || item.to.endsWith("/trainer") || item.to === "/client" }}
+            activeOptions={{
+              exact:
+                item.to.endsWith("/admin") || item.to.endsWith("/trainer") || item.to === "/client",
+            }}
             className="group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-foreground/80 transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[status=active]:bg-primary data-[status=active]:text-primary-foreground data-[status=active]:shadow-soft"
           >
             <item.icon className="h-4 w-4 opacity-90" />
@@ -235,6 +249,18 @@ function SidebarInner({
 }
 
 function NotificationsMenu() {
+  const [items, setItems] = useState<
+    Array<{ id: string; title: string; body?: string; desc?: string; time?: string }>
+  >([]);
+
+  useEffect(() => {
+    api<Array<{ id: string; title: string; body?: string; desc?: string; time?: string }>>(
+      "/notifications",
+    )
+      .then(setItems)
+      .catch(() => setItems([]));
+  }, []);
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -246,15 +272,20 @@ function NotificationsMenu() {
       <DropdownMenuContent align="end" className="w-80">
         <DropdownMenuLabel>Notifications</DropdownMenuLabel>
         <DropdownMenuSeparator />
-        {notifications.map((n) => (
+        {items.map((n) => (
           <DropdownMenuItem key={n.id} className="flex flex-col items-start gap-0.5 py-2">
             <div className="flex w-full items-center justify-between">
               <span className="text-sm font-medium">{n.title}</span>
-              <span className="text-[10px] text-muted-foreground">{n.time}</span>
+              <span className="text-[10px] text-muted-foreground">{n.time ?? "Now"}</span>
             </div>
-            <span className="text-xs text-muted-foreground">{n.desc}</span>
+            <span className="text-xs text-muted-foreground">{n.desc ?? n.body}</span>
           </DropdownMenuItem>
         ))}
+        {items.length === 0 && (
+          <DropdownMenuItem className="py-3 text-xs text-muted-foreground">
+            No notifications yet.
+          </DropdownMenuItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -272,10 +303,10 @@ export function PageHeader({
   return (
     <div className="mb-6 flex flex-col gap-2 md:mb-8 md:flex-row md:items-end md:justify-between">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">{title}</h1>
-        {description && (
-          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-        )}
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
+          {title}
+        </h1>
+        {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
       </div>
       {action && <div className="flex items-center gap-2">{action}</div>}
     </div>
@@ -314,7 +345,9 @@ export function StatCard({
             </p>
           )}
         </div>
-        <span className={cn("flex h-10 w-10 items-center justify-center rounded-xl", toneMap[tone])}>
+        <span
+          className={cn("flex h-10 w-10 items-center justify-center rounded-xl", toneMap[tone])}
+        >
           <Icon className="h-5 w-5" />
         </span>
       </div>
