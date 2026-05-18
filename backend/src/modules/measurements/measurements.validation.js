@@ -13,6 +13,11 @@ export const createMeasurementSchema = z.object({
     chest: z.number().positive().optional(),
     waist: z.number().positive().optional(),
     arms: z.number().positive().optional(),
+    upperBelly: z.number().positive().optional(),
+    lowerBelly: z.number().positive().optional(),
+    hip: z.number().positive().optional(),
+    thigh: z.number().positive().optional(),
+    calf: z.number().positive().optional(),
     measuredAt: z.string().datetime().optional(),
   }),
 });

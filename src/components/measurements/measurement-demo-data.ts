@@ -119,12 +119,12 @@ export function enrichApiMeasurements(
     weight: row.weight,
     chest: row.chest,
     arms: row.arms,
-    upperBelly: row.waist ? round(row.waist + 4 - index * 0.2) : undefined,
-    lowerBelly: row.waist ? round(row.waist + 8 - index * 0.3) : undefined,
-    hip: row.waist ? round(row.waist + 14 - index * 0.15) : undefined,
+    upperBelly: row.upperBelly ?? (row.waist ? round(row.waist + 4 - index * 0.2) : undefined),
+    lowerBelly: row.lowerBelly ?? (row.waist ? round(row.waist + 8 - index * 0.3) : undefined),
+    hip: row.hip ?? (row.waist ? round(row.waist + 14 - index * 0.15) : undefined),
     waist: row.waist,
-    thigh: row.waist ? round(row.waist - 26 + index * 0.1) : undefined,
-    calf: row.arms ? round(row.arms + 1.5) : undefined,
+    thigh: row.thigh ?? (row.waist ? round(row.waist - 26 + index * 0.1) : undefined),
+    calf: row.calf ?? (row.arms ? round(row.arms + 1.5) : undefined),
   }));
 }
 

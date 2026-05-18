@@ -6,6 +6,7 @@ import { ThemeToggle } from "@/lib/theme";
 import type { UserRole } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import authBg from "@/assets/auth-bg.jpg";
+import { PasswordInput } from "@/components/password-input";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
@@ -124,12 +125,13 @@ function LoginPage() {
                   </button>
                 }
               >
-                <input
-                  type="password"
+                <PasswordInput
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="mt-1.5 w-full rounded-xl border border-input bg-background/60 px-3.5 py-2.5 text-sm shadow-soft outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30"
+                  autoComplete="current-password"
+                  className="mt-1.5"
+                  inputClassName="w-full rounded-xl border border-input bg-background/60 px-3.5 py-2.5 text-sm shadow-soft outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30"
                 />
               </Field>
               <button

@@ -29,6 +29,11 @@ export interface MeasurementRecord {
   chest?: number;
   waist?: number;
   arms?: number;
+  upperBelly?: number;
+  lowerBelly?: number;
+  hip?: number;
+  thigh?: number;
+  calf?: number;
   measuredAt: string;
 }
 
@@ -62,6 +67,11 @@ export function measurementsByWeek(rows: MeasurementRecord[]) {
     chest: row.chest,
     waist: row.waist,
     arms: row.arms,
+    upperBelly: row.upperBelly,
+    lowerBelly: row.lowerBelly,
+    hip: row.hip,
+    thigh: row.thigh,
+    calf: row.calf,
   }));
 }
 

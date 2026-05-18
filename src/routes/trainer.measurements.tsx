@@ -81,6 +81,11 @@ function MeasurementsPage() {
           chest: entry.chest,
           waist: entry.waist,
           arms: entry.arms,
+          upperBelly: entry.upperBelly,
+          lowerBelly: entry.lowerBelly,
+          hip: entry.hip,
+          thigh: entry.thigh,
+          calf: entry.calf,
           measuredAt: entry.measuredAt,
         }),
       });

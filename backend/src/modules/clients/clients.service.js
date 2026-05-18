@@ -1,8 +1,11 @@
 import { and, eq, isNull, like } from "drizzle-orm";
+import bcrypt from "bcrypt";
 import { randomUUID } from "node:crypto";
 import { db } from "../../config/db.js";
-import { clients, trainers } from "../../db/schema.js";
+import { clients, trainers, users } from "../../db/schema.js";
 import { AppError } from "../../utils/AppError.js";
+
+const SALT_ROUNDS = 12;
 
 export async function trainerForUser(user) {
   const [trainer] = await db.select().from(trainers).where(eq(trainers.userId, user.id)).limit(1);
@@ -49,13 +52,38 @@ export async function getById(user, id) {
 export async function create(user, input) {
   const trainer = await trainerForUser(user);
   const now = new Date().toISOString();
+  const email = input.email.toLowerCase();
+  const existingUser = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.email, email))
+    .limit(1);
+  if (existingUser.length) throw new AppError("Email is already registered", 409);
+
+  const password = generateClientPassword(input.name);
+  const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+  const userId = randomUUID();
+  const clientId = randomUUID();
+
+  await db.insert(users).values({
+    id: userId,
+    name: input.name,
+    email,
+    passwordHash,
+    role: "client",
+    approvalStatus: "Approved",
+    createdAt: now,
+    updatedAt: now,
+  });
+
   const [client] = await db
     .insert(clients)
     .values({
-      id: randomUUID(),
+      id: clientId,
+      userId,
       trainerId: trainer.id,
       name: input.name,
-      email: input.email.toLowerCase(),
+      email,
       goal: input.goal ?? "General fitness",
       status: "Active",
       lastVisit: "Today",
@@ -68,7 +96,13 @@ export async function create(user, input) {
       updatedAt: now,
     })
     .returning();
-  return client;
+  return {
+    client,
+    credentials: {
+      email,
+      password,
+    },
+  };
 }
 
 export async function update(user, id, input) {
@@ -85,4 +119,15 @@ export async function remove(user, id) {
   await getById(user, id);
   await db.update(clients).set({ deletedAt: new Date().toISOString() }).where(eq(clients.id, id));
   return { deleted: true };
+}
+
+function generateClientPassword(name) {
+  const firstName = name.trim().split(/\s+/)[0] || "Client";
+  const base = firstName.replace(/[^a-z0-9]/gi, "").slice(0, 12) || "Client";
+  const number = Math.floor(1000 + Math.random() * 9000);
+  return `${capitalize(base)}@${number}`;
+}
+
+function capitalize(value) {
+  return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
 }

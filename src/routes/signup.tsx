@@ -4,6 +4,7 @@ import { Activity, Clock, ArrowRight } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { ThemeToggle } from "@/lib/theme";
 import authBg from "@/assets/auth-bg.jpg";
+import { PasswordInput } from "@/components/password-input";
 
 export const Route = createFileRoute("/signup")({
   component: SignupPage,
@@ -93,22 +94,37 @@ function SignupPage() {
               Trainers join by application. An admin will review your account.
             </p>
             <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-              {[
-                { label: "Full name", value: name, set: setName, type: "text" },
-                { label: "Email", value: email, set: setEmail, type: "email" },
-                { label: "Password", value: password, set: setPassword, type: "password" },
-              ].map((f) => (
-                <div key={f.label}>
-                  <label className="text-sm font-medium">{f.label}</label>
-                  <input
-                    type={f.type}
-                    value={f.value}
-                    onChange={(e) => f.set(e.target.value)}
-                    required
-                    className="mt-1.5 w-full rounded-xl border border-input bg-background/60 px-3.5 py-2.5 text-sm shadow-soft outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30"
-                  />
-                </div>
-              ))}
+              <div>
+                <label className="text-sm font-medium">Full name</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  className="mt-1.5 w-full rounded-xl border border-input bg-background/60 px-3.5 py-2.5 text-sm shadow-soft outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Email</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="mt-1.5 w-full rounded-xl border border-input bg-background/60 px-3.5 py-2.5 text-sm shadow-soft outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Password</label>
+                <PasswordInput
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  autoComplete="new-password"
+                  className="mt-1.5"
+                  inputClassName="w-full rounded-xl border border-input bg-background/60 px-3.5 py-2.5 text-sm shadow-soft outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30"
+                />
+              </div>
               <button
                 disabled={submitting}
                 className="btn-glow group flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground"
