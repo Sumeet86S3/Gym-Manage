@@ -1,0 +1,9 @@
+ALTER TABLE `measurements` ADD COLUMN `height` real;
+ALTER TABLE `measurements` ADD COLUMN `left_bicep` real;
+ALTER TABLE `measurements` ADD COLUMN `right_bicep` real;
+ALTER TABLE `measurements` ADD COLUMN `left_forearm` real;
+ALTER TABLE `measurements` ADD COLUMN `right_forearm` real;
+ALTER TABLE `measurements` ADD COLUMN `left_thigh` real;
+ALTER TABLE `measurements` ADD COLUMN `right_thigh` real;
+ALTER TABLE `measurements` ADD COLUMN `left_calf` real;
+ALTER TABLE `measurements` ADD COLUMN `right_calf` real;

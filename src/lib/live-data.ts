@@ -26,14 +26,23 @@ export interface MeasurementRecord {
   id: string;
   clientId: string;
   weight?: number;
+  height?: number;
   chest?: number;
   waist?: number;
   arms?: number;
+  leftBicep?: number;
+  rightBicep?: number;
+  leftForearm?: number;
+  rightForearm?: number;
   upperBelly?: number;
   lowerBelly?: number;
   hip?: number;
   thigh?: number;
+  leftThigh?: number;
+  rightThigh?: number;
   calf?: number;
+  leftCalf?: number;
+  rightCalf?: number;
   measuredAt: string;
 }
 

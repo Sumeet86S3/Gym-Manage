@@ -182,6 +182,29 @@
     background-color: color-mix(in oklab, var(--primary) 30%, transparent);
     color: var(--foreground);
   }
+
+  input[type="date"],
+  input[type="week"],
+  input[type="month"],
+  input[type="datetime-local"] {
+    color: var(--foreground);
+    color-scheme: light;
+  }
+
+  .dark input[type="date"],
+  .dark input[type="week"],
+  .dark input[type="month"],
+  .dark input[type="datetime-local"] {
+    color-scheme: dark;
+  }
+
+  input[type="date"]::-webkit-calendar-picker-indicator,
+  input[type="week"]::-webkit-calendar-picker-indicator,
+  input[type="month"]::-webkit-calendar-picker-indicator,
+  input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0;
+  }
 }
 
 @layer utilities {
