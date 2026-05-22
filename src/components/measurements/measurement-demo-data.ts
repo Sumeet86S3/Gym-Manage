@@ -32,7 +32,7 @@ const sampleProfiles = [
     joinedAt: "2025-02-03",
     streak: 9,
     plan: "Transformation",
-    paymentStatus: "Due" as const,
+    paymentStatus: "Due Soon" as const,
     dueDate: "2026-05-30",
   },
 ];

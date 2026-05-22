@@ -19,7 +19,8 @@ export interface Client {
   joinedAt: string;
   streak: number;
   plan: string;
-  paymentStatus: "Paid" | "Due" | "Overdue";
+  monthlyFee?: number;
+  paymentStatus: "Paid" | "Due Soon" | "Unpaid";
   dueDate?: string | null;
 }
 

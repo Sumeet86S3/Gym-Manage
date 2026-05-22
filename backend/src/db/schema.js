@@ -69,7 +69,8 @@ export const clients = sqliteTable(
     joinedAt: text("joined_at").notNull(),
     streak: integer("streak").notNull().default(0),
     plan: text("plan").notNull().default("Standard Monthly"),
-    paymentStatus: text("payment_status", { enum: ["Paid", "Due", "Overdue"] })
+    monthlyFee: integer("monthly_fee").notNull().default(0),
+    paymentStatus: text("payment_status", { enum: ["Paid", "Due Soon", "Unpaid"] })
       .notNull()
       .default("Paid"),
     dueDate: text("due_date"),
@@ -241,7 +242,7 @@ export const payments = sqliteTable(
     amount: integer("amount").notNull(),
     currency: text("currency").notNull().default("INR"),
     plan: text("plan").notNull(),
-    status: text("status", { enum: ["Paid", "Due", "Overdue"] }).notNull(),
+    status: text("status", { enum: ["Paid", "Due Soon", "Unpaid"] }).notNull(),
     paidAt: text("paid_at"),
     dueDate: text("due_date"),
     provider: text("provider"),

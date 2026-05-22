@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { CalendarDays, Lock } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { PageHeader } from "@/components/app-shell";
 import { measurementFields, type BodyMeasurementEntry } from "@/components/measurements/types";
 import { useApiResource } from "@/hooks/use-api-resource";
@@ -13,12 +13,12 @@ export const Route = createFileRoute("/client/progress")({
 function ProgressPage() {
   const { data: rows, loading } = useApiResource<MeasurementRecord[]>("/measurements", []);
   const [selectedWeek, setSelectedWeek] = useState("");
-  const history = useMemo(
-    () => rows.map(normalizeMeasurement).sort(sortByDateDesc),
-    [rows],
-  );
+  const history = useMemo(() => rows.map(normalizeMeasurement).sort(sortByDateDesc), [rows]);
   const filteredHistory = useMemo(
-    () => (selectedWeek ? history.filter((entry) => weekValue(entry.measuredAt) === selectedWeek) : history),
+    () =>
+      selectedWeek
+        ? history.filter((entry) => weekValue(entry.measuredAt) === selectedWeek)
+        : history,
     [history, selectedWeek],
   );
 
@@ -59,22 +59,39 @@ function ProgressPage() {
 }
 
 function WeekFilter({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function openPicker() {
+    inputRef.current?.showPicker?.();
+    inputRef.current?.focus();
+  }
+
   return (
     <label className="w-full text-sm font-medium text-foreground sm:max-w-xs">
       View by week
-      <span className="mt-2 flex min-h-11 items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 shadow-soft transition focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
+      <span
+        className="relative mt-2 flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 shadow-soft transition hover:border-primary/60 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20"
+        onClick={openPicker}
+      >
         <input
+          ref={inputRef}
           type="week"
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none"
+          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
         />
+        <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+          {value ? formatWeekInput(value) : "Week --, ----"}
+        </span>
         <CalendarDays className="h-4 w-4 shrink-0 text-primary" />
         {value ? (
           <button
             type="button"
-            onClick={() => onChange("")}
-            className="text-xs font-semibold text-primary hover:underline"
+            onClick={(event) => {
+              event.stopPropagation();
+              onChange("");
+            }}
+            className="relative z-10 rounded px-1 text-xs font-semibold text-primary hover:underline"
           >
             All
           </button>
@@ -122,7 +139,10 @@ function MeasurementTable({
                       {weekLabel(row.measuredAt)}
                     </td>
                     {measurementFields.map((field) => (
-                      <td key={field.key} className="whitespace-nowrap px-3 py-3 text-muted-foreground">
+                      <td
+                        key={field.key}
+                        className="whitespace-nowrap px-3 py-3 text-muted-foreground"
+                      >
                         {formatMeasurement(row[field.key], field.unit)}
                       </td>
                     ))}
@@ -194,4 +214,10 @@ function weekValue(value: string) {
 function weekLabel(value: string) {
   const [, week] = weekValue(value).split("-W");
   return `Week ${Number(week)}`;
+}
+
+function formatWeekInput(value: string) {
+  const [year, week] = value.split("-W");
+  if (!year || !week) return value;
+  return `Week ${Number(week)}, ${year}`;
 }

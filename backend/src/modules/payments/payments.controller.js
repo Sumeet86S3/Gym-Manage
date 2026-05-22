@@ -9,3 +9,7 @@ export const list = asyncHandler(async (req, res) => {
 export const create = asyncHandler(async (req, res) => {
   created(res, await service.create(req.validated.body), "Payment created");
 });
+
+export const markPaid = asyncHandler(async (req, res) => {
+  success(res, await service.markPaid(req.user, req.validated.params.id), "Payment marked paid");
+});

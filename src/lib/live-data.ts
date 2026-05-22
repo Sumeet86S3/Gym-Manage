@@ -16,7 +16,7 @@ export interface PaymentRecord {
   client?: string;
   amount: number;
   plan: string;
-  status: "Paid" | "Due" | "Overdue";
+  status: "Paid" | "Due Soon" | "Unpaid";
   paidAt?: string | null;
   dueDate?: string | null;
   createdAt?: string;

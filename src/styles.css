@@ -205,6 +205,20 @@
     cursor: pointer;
     opacity: 0;
   }
+
+  select {
+    color: var(--foreground);
+    color-scheme: light;
+  }
+
+  .dark select {
+    color-scheme: dark;
+  }
+
+  select option {
+    background-color: var(--popover);
+    color: var(--popover-foreground);
+  }
 }
 
 @layer utilities {

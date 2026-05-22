@@ -222,7 +222,11 @@ function TrainerDashboard() {
                 <p className="text-sm font-semibold">{toCurrency(p.amount)}</p>
                 <StatusBadge
                   tone={
-                    p.status === "Paid" ? "success" : p.status === "Due" ? "warning" : "destructive"
+                    p.status === "Paid"
+                      ? "success"
+                      : p.status === "Due Soon"
+                        ? "warning"
+                        : "destructive"
                   }
                 >
                   {p.status}

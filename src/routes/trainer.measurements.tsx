@@ -1,8 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { CalendarDays, Save, Users } from "lucide-react";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { CalendarDays, ChevronDown, Save, Users } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { PageHeader } from "@/components/app-shell";
-import { measurementFields, type BodyMeasurementEntry, type MeasurementKey } from "@/components/measurements/types";
+import {
+  measurementFields,
+  type BodyMeasurementEntry,
+  type MeasurementKey,
+} from "@/components/measurements/types";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { api } from "@/lib/api";
 import type { Client } from "@/lib/types";
@@ -20,6 +24,7 @@ const emptyValues = measurementFields.reduce(
 
 function MeasurementsPage() {
   const { data: clients, loading: clientsLoading } = useApiResource<Client[]>("/clients", []);
+  const dateInputRef = useRef<HTMLInputElement>(null);
   const [selectedClientId, setSelectedClientId] = useState("");
   const [selectedWeek, setSelectedWeek] = useState("");
   const [values, setValues] = useState(emptyValues);
@@ -39,16 +44,22 @@ function MeasurementsPage() {
     [],
   );
 
-  const history = useMemo(
-    () => rows.map(normalizeMeasurement).sort(sortByDateDesc),
-    [rows],
-  );
+  const history = useMemo(() => rows.map(normalizeMeasurement).sort(sortByDateDesc), [rows]);
   const filteredHistory = useMemo(
-    () => (selectedWeek ? history.filter((entry) => weekValue(entry.measuredAt) === selectedWeek) : history),
+    () =>
+      selectedWeek
+        ? history.filter((entry) => weekValue(entry.measuredAt) === selectedWeek)
+        : history,
     [history, selectedWeek],
   );
   const hasValue = Object.values(values).some(Boolean);
   const selectedClient = clients.find((client) => client.id === selectedClientId);
+
+  function openDatePicker() {
+    if (!selectedClientId || saving) return;
+    dateInputRef.current?.showPicker?.();
+    dateInputRef.current?.focus();
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -89,18 +100,18 @@ function MeasurementsPage() {
       />
 
       <section className="rounded-xl border border-border bg-card p-5 shadow-card">
-        <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
-          <label className="text-sm font-medium text-foreground">
+        <div className="grid gap-4 md:grid-cols-[minmax(0,1.4fr)_minmax(16rem,0.8fr)]">
+          <label className="min-w-0 text-sm font-medium text-foreground">
             Client
-            <span className="mt-2 flex min-h-11 items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 shadow-soft transition focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
-              <Users className="h-4 w-4 text-primary" />
+            <span className="relative mt-2 flex min-h-11 items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 shadow-soft transition focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
+              <Users className="h-4 w-4 shrink-0 text-primary" />
               <select
                 value={selectedClientId}
                 onChange={(event) => {
                   setSelectedClientId(event.target.value);
                   setSelectedWeek("");
                 }}
-                className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none"
+                className="min-w-0 flex-1 appearance-none bg-transparent pr-7 text-sm font-medium text-foreground outline-none"
                 disabled={clientsLoading}
               >
                 {clients.length ? null : <option value="">No clients found</option>}
@@ -110,6 +121,7 @@ function MeasurementsPage() {
                   </option>
                 ))}
               </select>
+              <ChevronDown className="pointer-events-none absolute right-3 h-4 w-4 text-primary" />
             </span>
           </label>
 
@@ -128,16 +140,23 @@ function MeasurementsPage() {
         </div>
 
         <form onSubmit={submit}>
-          <label className="mb-4 block max-w-xs text-sm font-medium text-foreground">
+          <label className="mb-4 block w-full max-w-xs text-sm font-medium text-foreground">
             Measurement date
-            <span className="mt-2 flex min-h-11 items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 shadow-soft transition focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
+            <span
+              className="relative mt-2 flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 shadow-soft transition hover:border-primary/60 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20"
+              onClick={openDatePicker}
+            >
               <input
+                ref={dateInputRef}
                 type="date"
                 value={date}
                 onChange={(event) => setDate(event.target.value)}
-                className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none"
+                className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
                 disabled={!selectedClientId || saving}
               />
+              <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                {formatDateInput(date)}
+              </span>
               <CalendarDays className="h-4 w-4 shrink-0 text-primary" />
             </span>
           </label>
@@ -192,22 +211,39 @@ function MeasurementsPage() {
 }
 
 function WeekFilter({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function openPicker() {
+    inputRef.current?.showPicker?.();
+    inputRef.current?.focus();
+  }
+
   return (
-    <label className="text-sm font-medium text-foreground">
+    <label className="min-w-0 text-sm font-medium text-foreground">
       View by week
-      <span className="mt-2 flex min-h-11 items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 shadow-soft transition focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
+      <span
+        className="relative mt-2 flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 shadow-soft transition hover:border-primary/60 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20"
+        onClick={openPicker}
+      >
         <input
+          ref={inputRef}
           type="week"
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none"
+          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
         />
+        <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+          {value ? formatWeekInput(value) : "Week --, ----"}
+        </span>
         <CalendarDays className="h-4 w-4 shrink-0 text-primary" />
         {value ? (
           <button
             type="button"
-            onClick={() => onChange("")}
-            className="text-xs font-semibold text-primary hover:underline"
+            onClick={(event) => {
+              event.stopPropagation();
+              onChange("");
+            }}
+            className="relative z-10 rounded px-1 text-xs font-semibold text-primary hover:underline"
           >
             All
           </button>
@@ -267,7 +303,10 @@ function MeasurementTable({
                       {weekLabel(row.measuredAt)}
                     </td>
                     {measurementFields.map((field) => (
-                      <td key={field.key} className="whitespace-nowrap px-3 py-3 text-muted-foreground">
+                      <td
+                        key={field.key}
+                        className="whitespace-nowrap px-3 py-3 text-muted-foreground"
+                      >
                         {formatMeasurement(row[field.key], field.unit)}
                       </td>
                     ))}
@@ -339,4 +378,21 @@ function weekValue(value: string) {
 function weekLabel(value: string) {
   const [, week] = weekValue(value).split("-W");
   return `Week ${Number(week)}`;
+}
+
+function formatWeekInput(value: string) {
+  const [year, week] = value.split("-W");
+  if (!year || !week) return value;
+  return `Week ${Number(week)}, ${year}`;
+}
+
+function formatDateInput(value: string) {
+  if (!value) return "Select date";
+  const [year, month, day] = value.split("-");
+  if (!year || !month || !day) return value;
+  return new Date(Number(year), Number(month) - 1, Number(day)).toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 }

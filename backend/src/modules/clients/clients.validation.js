@@ -13,7 +13,9 @@ export const createClientSchema = z.object({
     email: z.string().email(),
     goal: z.string().max(160).optional(),
     plan: z.string().max(80).optional(),
-    paymentStatus: z.enum(["Paid", "Due", "Overdue"]).optional(),
+    monthlyFee: z.number().int().nonnegative().optional(),
+    admissionDate: z.string().optional(),
+    paymentStatus: z.enum(["Paid", "Due Soon", "Unpaid"]).optional(),
     dueDate: z.string().optional(),
   }),
 });

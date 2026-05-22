@@ -20,6 +20,14 @@ function ClientPayments() {
         description="Your plan, billing history and upcoming payments."
       />
 
+      {active && active.status !== "Paid" ? (
+        <div className="mb-6 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-foreground">
+          {active.status === "Unpaid"
+            ? "Your fee payment is overdue. Please contact your trainer to complete it."
+            : `Reminder: your next fee payment is due on ${formatDateLabel(active.dueDate)}.`}
+        </div>
+      ) : null}
+
       <div className="mb-6 rounded-2xl border border-border bg-card p-6 shadow-card">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -36,9 +44,9 @@ function ClientPayments() {
             </p>
             <StatusBadge
               tone={
-                active?.status === "Overdue"
+                active?.status === "Unpaid"
                   ? "destructive"
-                  : active?.status === "Due"
+                  : active?.status === "Due Soon"
                     ? "warning"
                     : "success"
               }
@@ -74,7 +82,7 @@ function ClientPayments() {
                       tone={
                         p.status === "Paid"
                           ? "success"
-                          : p.status === "Due"
+                          : p.status === "Due Soon"
                             ? "warning"
                             : "destructive"
                       }

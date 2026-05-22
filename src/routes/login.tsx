@@ -34,7 +34,7 @@ function LoginPage() {
     try {
       const user = await login(
         email || roles.find((r) => r.id === role)!.demoEmail,
-        password,
+        password || "password123",
         role,
       );
       if (user.role === "trainer" && !user.approved) {

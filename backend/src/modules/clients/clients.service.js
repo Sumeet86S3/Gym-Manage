@@ -2,8 +2,9 @@ import { and, eq, isNull, like } from "drizzle-orm";
 import bcrypt from "bcrypt";
 import { randomUUID } from "node:crypto";
 import { db } from "../../config/db.js";
-import { clients, trainers, users } from "../../db/schema.js";
+import { clients, payments, trainers, users } from "../../db/schema.js";
 import { AppError } from "../../utils/AppError.js";
+import { dateOnly, nextMonthlyDueDate, refreshBillingStatuses } from "../payments/billing.js";
 
 const SALT_ROUNDS = 12;
 
@@ -20,6 +21,7 @@ export async function clientForUser(user) {
 }
 
 export async function list(user, query = {}) {
+  await refreshBillingStatuses();
   const where = [isNull(clients.deletedAt)];
   if (user.role === "trainer") {
     const trainer = await trainerForUser(user);
@@ -36,6 +38,7 @@ export async function list(user, query = {}) {
 }
 
 export async function getById(user, id) {
+  await refreshBillingStatuses();
   const [client] = await db
     .select()
     .from(clients)
@@ -64,6 +67,10 @@ export async function create(user, input) {
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
   const userId = randomUUID();
   const clientId = randomUUID();
+  const admissionDate = input.admissionDate ?? now.slice(0, 10);
+  const monthlyFee = input.monthlyFee ?? 0;
+  const plan = input.plan ?? "Standard Monthly";
+  const dueDate = input.dueDate ?? nextMonthlyDueDate(admissionDate, admissionDate);
 
   await db.insert(users).values({
     id: userId,
@@ -87,15 +94,30 @@ export async function create(user, input) {
       goal: input.goal ?? "General fitness",
       status: "Active",
       lastVisit: "Today",
-      joinedAt: now.slice(0, 10),
+      joinedAt: admissionDate,
       streak: 0,
-      plan: input.plan ?? "Standard Monthly",
+      plan,
+      monthlyFee,
       paymentStatus: input.paymentStatus ?? "Paid",
-      dueDate: input.dueDate,
+      dueDate,
       createdAt: now,
       updatedAt: now,
     })
     .returning();
+
+  await db.insert(payments).values({
+    id: randomUUID(),
+    clientId,
+    amount: monthlyFee,
+    currency: "INR",
+    plan,
+    status: "Paid",
+    paidAt: `${dateOnly(admissionDate)}T00:00:00.000Z`,
+    dueDate,
+    createdAt: now,
+    updatedAt: now,
+  });
+
   return {
     client,
     credentials: {
@@ -106,12 +128,43 @@ export async function create(user, input) {
 }
 
 export async function update(user, id, input) {
-  await getById(user, id);
-  const [updated] = await db
-    .update(clients)
-    .set({ ...input, updatedAt: new Date().toISOString() })
-    .where(eq(clients.id, id))
-    .returning();
+  const existing = await getById(user, id);
+  if (input.email) {
+    const email = input.email.toLowerCase();
+    const [duplicateClient] = await db
+      .select()
+      .from(clients)
+      .where(eq(clients.email, email))
+      .limit(1);
+    if (duplicateClient && duplicateClient.id !== id) {
+      throw new AppError("Email is already registered", 409);
+    }
+    const [duplicateUser] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+    if (duplicateUser && duplicateUser.id !== existing.userId) {
+      throw new AppError("Email is already registered", 409);
+    }
+  }
+  const { admissionDate, ...clientInput } = input;
+  const update = {
+    ...clientInput,
+    ...(admissionDate ? { joinedAt: admissionDate } : {}),
+    ...(clientInput.email ? { email: clientInput.email.toLowerCase() } : {}),
+    updatedAt: new Date().toISOString(),
+  };
+
+  const [updated] = await db.update(clients).set(update).where(eq(clients.id, id)).returning();
+
+  if (existing.userId && (input.name || input.email)) {
+    await db
+      .update(users)
+      .set({
+        ...(input.name ? { name: input.name } : {}),
+        ...(input.email ? { email: input.email.toLowerCase() } : {}),
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(users.id, existing.userId));
+  }
+
   return updated;
 }
 

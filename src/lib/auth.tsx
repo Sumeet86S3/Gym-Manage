@@ -17,6 +17,7 @@ interface AuthContextValue {
   loading: boolean;
   login: (email: string, password: string, role: UserRole) => Promise<AuthUser>;
   signupTrainer: (name: string, email: string, password: string) => Promise<AuthUser>;
+  updateMe: (input: { name?: string; email?: string }) => Promise<AuthUser>;
   logout: () => void;
 }
 
@@ -58,6 +59,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return nextUser;
   };
 
+  const updateMe = async (input: { name?: string; email?: string }) => {
+    const data = await api<AuthUser>("/users/me", {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
+    const nextUser = normalizeUser(data);
+    setUser(nextUser);
+    return nextUser;
+  };
+
   const logout = () => {
     api("/auth/logout", { method: "POST" }).catch(() => undefined);
     setAccessToken(null);
@@ -65,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, signupTrainer, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, signupTrainer, updateMe, logout }}>
       {children}
     </AuthContext.Provider>
   );
