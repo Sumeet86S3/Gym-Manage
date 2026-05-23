@@ -12,7 +12,14 @@ export const createMealSchema = z.object({
   body: z.object({
     type: z.enum(["Breakfast", "Lunch", "Dinner", "Snacks"]),
     note: z.string().max(1000).optional(),
-    imageUrl: z.string().min(1),
+    imageData: z
+      .string()
+      .regex(
+        /^data:image\/(png|jpe?g|webp);base64,/i,
+        "Meal image must be a PNG, JPG, or WebP data URL",
+      )
+      .max(14_000_000, "Meal image must be under 10MB"),
+    imageFileName: z.string().max(255).optional(),
     loggedAt: z.string().datetime().optional(),
   }),
 });

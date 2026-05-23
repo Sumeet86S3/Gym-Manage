@@ -2,6 +2,7 @@ import { and, eq, gte, isNull, like } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { db } from "../../config/db.js";
 import { clients, mealLogs } from "../../db/schema.js";
+import { uploadMealImage } from "../../services/imagekit.service.js";
 import { clientForUser, trainerForUser } from "../clients/clients.service.js";
 
 const DAY_MS = 1000 * 60 * 60 * 24;
@@ -56,6 +57,10 @@ export async function list(user, query = {}) {
 export async function create(user, input) {
   const client = await clientForUser(user);
   const now = new Date().toISOString();
+  const image = await uploadMealImage({
+    imageData: input.imageData,
+    fileName: input.imageFileName,
+  });
   const [meal] = await db
     .insert(mealLogs)
     .values({
@@ -63,7 +68,7 @@ export async function create(user, input) {
       clientId: client.id,
       type: input.type,
       note: input.note,
-      imageUrl: input.imageUrl,
+      imageUrl: image.url,
       loggedAt: input.loggedAt ?? now,
       createdAt: now,
       updatedAt: now,

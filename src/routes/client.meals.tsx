@@ -47,6 +47,7 @@ function ClientMealsPage() {
   const [type, setType] = useState<MealType>("Breakfast");
   const [note, setNote] = useState("");
   const [preview, setPreview] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const meals = loadedMeals;
@@ -58,7 +59,13 @@ function ClientMealsPage() {
       toast.error("Please upload an image file");
       return;
     }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Please upload an image under 10MB");
+      return;
+    }
+    if (preview) URL.revokeObjectURL(preview);
     const url = URL.createObjectURL(file);
+    setSelectedFile(file);
     setPreview(url);
   };
 
@@ -69,50 +76,58 @@ function ClientMealsPage() {
   };
 
   const reset = () => {
+    if (preview) URL.revokeObjectURL(preview);
     setPreview(null);
+    setSelectedFile(null);
     setNote("");
     if (fileRef.current) fileRef.current.value = "";
     if (cameraRef.current) cameraRef.current.value = "";
   };
 
   const submit = async () => {
-    if (!preview) {
+    if (!selectedFile) {
       toast.error("Add a meal photo first");
       return;
     }
     setSubmitting(true);
-    await new Promise((r) => setTimeout(r, 900));
-    const now = new Date();
-    const saved = await api<{
-      id: string;
-      clientId: string;
-      type: MealType;
-      note?: string;
-      imageUrl: string;
-      loggedAt: string;
-    }>("/meals", {
-      method: "POST",
-      body: JSON.stringify({
-        type,
-        note: note.trim() || undefined,
-        imageUrl: preview,
-        loggedAt: now.toISOString(),
-      }),
-    });
-    const entry: MealEntry = {
-      id: saved.id,
-      clientId: saved.clientId,
-      clientName: user?.name ?? "You",
-      type: saved.type,
-      time: now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
-      timestamp: new Date(saved.loggedAt).getTime(),
-      note: saved.note,
-      image: saved.imageUrl,
-    };
-    setMeals((m) => [entry, ...m]);
-    setSubmitting(false);
-    toast.success("Meal uploaded! Your trainer can see it now. 🥗");
-    reset();
+    try {
+      const imageData = await readFileAsDataUrl(selectedFile);
+      const now = new Date();
+      const saved = await api<{
+        id: string;
+        clientId: string;
+        type: MealType;
+        note?: string;
+        imageUrl: string;
+        loggedAt: string;
+      }>("/meals", {
+        method: "POST",
+        body: JSON.stringify({
+          type,
+          note: note.trim() || undefined,
+          imageData,
+          imageFileName: selectedFile.name,
+          loggedAt: now.toISOString(),
+        }),
+      });
+      const entry: MealEntry = {
+        id: saved.id,
+        clientId: saved.clientId,
+        clientName: user?.name ?? "You",
+        type: saved.type,
+        time: now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+        timestamp: new Date(saved.loggedAt).getTime(),
+        note: saved.note,
+        image: saved.imageUrl,
+      };
+      setMeals((m) => [entry, ...m]);
+      toast.success("Meal uploaded! Your trainer can see it now. 🥗");
+      reset();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to upload meal.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -286,6 +301,18 @@ function ClientMealsPage() {
       </section>
     </div>
   );
+}
+
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") resolve(reader.result);
+      else reject(new Error("Unable to read meal image."));
+    };
+    reader.onerror = () => reject(new Error("Unable to read meal image."));
+    reader.readAsDataURL(file);
+  });
 }
 
 function MealHistoryCard({ meal }: { meal: MealEntry }) {

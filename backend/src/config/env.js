@@ -19,6 +19,9 @@ const envSchema = z.object({
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(200),
   TURSO_DATABASE_URL: z.string().min(1),
   TURSO_AUTH_TOKEN: z.string().optional(),
+  IMAGEKIT_PUBLIC_KEY: z.string().min(1),
+  IMAGEKIT_PRIVATE_KEY: z.string().min(1),
+  IMAGEKIT_MEAL_FOLDER: z.string().default("/realm-fit/meals"),
 });
 
 const parsed = envSchema.safeParse(process.env);
