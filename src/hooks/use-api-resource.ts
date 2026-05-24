@@ -1,26 +1,38 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useMemo, type SetStateAction } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 
 export function useApiResource<T>(path: string, fallback: T) {
-  const [data, setData] = useState<T>(fallback);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const queryClient = useQueryClient();
+  const queryKey = useMemo(() => ["api", path] as const, [path]);
+  const query = useQuery({
+    queryKey,
+    queryFn: ({ signal }) => api<T>(path, { signal }),
+    placeholderData: (previous) => previous,
+  });
+
+  const data = query.data ?? fallback;
+  const { refetch } = query;
 
   const reload = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      setData(await api<T>(path));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to load data");
-    } finally {
-      setLoading(false);
-    }
-  }, [path]);
+    await refetch();
+  }, [refetch]);
 
-  useEffect(() => {
-    reload();
-  }, [reload]);
+  const setData = useCallback(
+    (next: SetStateAction<T>) => {
+      queryClient.setQueryData<T>(queryKey, (current) => {
+        const value = current ?? data ?? fallback;
+        return typeof next === "function" ? (next as (previous: T) => T)(value) : next;
+      });
+    },
+    [data, fallback, queryClient, queryKey],
+  );
 
-  return { data, setData, loading, error, reload };
+  return {
+    data,
+    setData,
+    loading: query.isLoading,
+    error: query.error instanceof Error ? query.error.message : "",
+    reload,
+  };
 }

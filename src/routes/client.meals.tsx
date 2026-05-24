@@ -39,15 +39,27 @@ const mealOptions: { value: MealType; icon: typeof Coffee; hint: string }[] = [
   { value: "Snacks", icon: Cookie, hint: "In-between bites" },
 ];
 
+const MAX_MEAL_IMAGE_SIZE = 10 * 1024 * 1024;
+const MEAL_IMAGE_MAX_DIMENSION = 1600;
+const MEAL_IMAGE_QUALITY = 0.78;
+
 function ClientMealsPage() {
   const { user } = useAuth();
   const { data: loadedMeals, setData: setLoadedMeals } = useApiResource<MealEntry[]>("/meals", []);
   const fileRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
+  const compressionIdRef = useRef(0);
   const [type, setType] = useState<MealType>("Breakfast");
   const [note, setNote] = useState("");
   const [preview, setPreview] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [optimizedImage, setOptimizedImage] = useState<{
+    dataUrl: string;
+    fileName: string;
+    originalSize: number;
+    optimizedSize: number;
+  } | null>(null);
+  const [optimizingImage, setOptimizingImage] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const meals = loadedMeals;
@@ -59,14 +71,31 @@ function ClientMealsPage() {
       toast.error("Please upload an image file");
       return;
     }
-    if (file.size > 10 * 1024 * 1024) {
+    if (file.size > MAX_MEAL_IMAGE_SIZE) {
       toast.error("Please upload an image under 10MB");
       return;
     }
     if (preview) URL.revokeObjectURL(preview);
     const url = URL.createObjectURL(file);
+    const compressionId = compressionIdRef.current + 1;
+    compressionIdRef.current = compressionId;
     setSelectedFile(file);
+    setOptimizedImage(null);
+    setOptimizingImage(true);
     setPreview(url);
+
+    optimizeMealImage(file)
+      .then((optimized) => {
+        if (compressionIdRef.current !== compressionId) return;
+        setOptimizedImage(optimized);
+      })
+      .catch(() => {
+        if (compressionIdRef.current !== compressionId) return;
+        toast.error("Unable to optimize this image. Try another photo.");
+      })
+      .finally(() => {
+        if (compressionIdRef.current === compressionId) setOptimizingImage(false);
+      });
   };
 
   const onDrop = (e: React.DragEvent) => {
@@ -76,9 +105,12 @@ function ClientMealsPage() {
   };
 
   const reset = () => {
+    compressionIdRef.current += 1;
     if (preview) URL.revokeObjectURL(preview);
     setPreview(null);
     setSelectedFile(null);
+    setOptimizedImage(null);
+    setOptimizingImage(false);
     setNote("");
     if (fileRef.current) fileRef.current.value = "";
     if (cameraRef.current) cameraRef.current.value = "";
@@ -91,7 +123,7 @@ function ClientMealsPage() {
     }
     setSubmitting(true);
     try {
-      const imageData = await readFileAsDataUrl(selectedFile);
+      const image = optimizedImage ?? (await optimizeMealImage(selectedFile));
       const now = new Date();
       const saved = await api<{
         id: string;
@@ -105,8 +137,8 @@ function ClientMealsPage() {
         body: JSON.stringify({
           type,
           note: note.trim() || undefined,
-          imageData,
-          imageFileName: selectedFile.name,
+          imageData: image.dataUrl,
+          imageFileName: image.fileName,
           loggedAt: now.toISOString(),
         }),
       });
@@ -263,7 +295,7 @@ function ClientMealsPage() {
               {submitting ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Uploading…
+                  {optimizingImage ? "Optimizing…" : "Uploading…"}
                 </>
               ) : (
                 <>
@@ -303,7 +335,90 @@ function ClientMealsPage() {
   );
 }
 
-function readFileAsDataUrl(file: File) {
+async function optimizeMealImage(file: File) {
+  if (file.size <= 500 * 1024 && /^image\/jpe?g$/i.test(file.type)) {
+    const dataUrl = await readFileAsDataUrl(file);
+    return {
+      dataUrl,
+      fileName: file.name,
+      originalSize: file.size,
+      optimizedSize: estimateDataUrlBytes(dataUrl),
+    };
+  }
+
+  const image = await loadImageSource(file);
+  const scale = Math.min(1, MEAL_IMAGE_MAX_DIMENSION / Math.max(image.width, image.height));
+  const width = Math.max(1, Math.round(image.width * scale));
+  const height = Math.max(1, Math.round(image.height * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+
+  const context = canvas.getContext("2d", { alpha: false });
+  if (!context) throw new Error("Unable to optimize meal image.");
+
+  context.drawImage(image.source, 0, 0, width, height);
+  image.close?.();
+
+  const blob = await canvasToBlob(canvas, "image/jpeg", MEAL_IMAGE_QUALITY);
+  const dataUrl = await readFileAsDataUrl(blob);
+
+  return {
+    dataUrl,
+    fileName: replaceImageExtension(file.name, "jpg"),
+    originalSize: file.size,
+    optimizedSize: blob.size,
+  };
+}
+
+async function loadImageSource(file: File): Promise<{
+  source: CanvasImageSource;
+  width: number;
+  height: number;
+  close?: () => void;
+}> {
+  if ("createImageBitmap" in window) {
+    const bitmap = await createImageBitmap(file);
+    return {
+      source: bitmap,
+      width: bitmap.width,
+      height: bitmap.height,
+      close: () => bitmap.close(),
+    };
+  }
+
+  const dataUrl = await readFileAsDataUrl(file);
+  const image = await loadHtmlImage(dataUrl);
+  return {
+    source: image,
+    width: image.naturalWidth,
+    height: image.naturalHeight,
+  };
+}
+
+function loadHtmlImage(src: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Unable to load meal image."));
+    image.src = src;
+  });
+}
+
+function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number) {
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error("Unable to optimize meal image."));
+      },
+      type,
+      quality,
+    );
+  });
+}
+
+function readFileAsDataUrl(file: Blob) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
@@ -313,6 +428,16 @@ function readFileAsDataUrl(file: File) {
     reader.onerror = () => reject(new Error("Unable to read meal image."));
     reader.readAsDataURL(file);
   });
+}
+
+function replaceImageExtension(fileName: string, extension: string) {
+  const baseName = fileName.replace(/\.[^.]+$/, "");
+  return `${baseName || "meal-photo"}.${extension}`;
+}
+
+function estimateDataUrlBytes(dataUrl: string) {
+  const base64 = dataUrl.split(",")[1] ?? "";
+  return Math.ceil((base64.length * 3) / 4);
 }
 
 function MealHistoryCard({ meal }: { meal: MealEntry }) {

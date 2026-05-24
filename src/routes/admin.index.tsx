@@ -1,17 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { Suspense } from "react";
 import { Users, ShieldCheck, UserCheck, TrendingUp } from "lucide-react";
 import { PageHeader, StatCard } from "@/components/app-shell";
 import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-  Tooltip,
-  BarChart,
-  Bar,
-} from "recharts";
+  ChartFallback,
+  LazyAttendanceAreaChart,
+  LazyRevenueBarChart,
+} from "@/components/charts/lazy-metric-charts";
 import { useApiResource } from "@/hooks/use-api-resource";
 import {
   emptyTrend,
@@ -60,48 +55,9 @@ function AdminDashboard() {
             <TrendingUp className="h-5 w-5 text-success" />
           </div>
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={emptyTrend} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="att" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.35} />
-                    <stop offset="95%" stopColor="var(--color-primary)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="var(--color-border)"
-                  vertical={false}
-                />
-                <XAxis
-                  dataKey="day"
-                  stroke="var(--color-muted-foreground)"
-                  fontSize={12}
-                  tickLine={false}
-                  axisLine={false}
-                />
-                <YAxis
-                  stroke="var(--color-muted-foreground)"
-                  fontSize={12}
-                  tickLine={false}
-                  axisLine={false}
-                />
-                <Tooltip
-                  contentStyle={{
-                    borderRadius: 12,
-                    border: "1px solid var(--color-border)",
-                    background: "var(--color-popover)",
-                  }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="visits"
-                  stroke="var(--color-primary)"
-                  strokeWidth={2}
-                  fill="url(#att)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+            <Suspense fallback={<ChartFallback />}>
+              <LazyAttendanceAreaChart data={emptyTrend} gradientId="admin-attendance" />
+            </Suspense>
           </div>
         </div>
 
@@ -111,36 +67,9 @@ function AdminDashboard() {
             <p className="text-lg font-semibold">Paid payments</p>
           </div>
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={revenue} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="var(--color-border)"
-                  vertical={false}
-                />
-                <XAxis
-                  dataKey="month"
-                  stroke="var(--color-muted-foreground)"
-                  fontSize={12}
-                  tickLine={false}
-                  axisLine={false}
-                />
-                <YAxis
-                  stroke="var(--color-muted-foreground)"
-                  fontSize={12}
-                  tickLine={false}
-                  axisLine={false}
-                />
-                <Tooltip
-                  contentStyle={{
-                    borderRadius: 12,
-                    border: "1px solid var(--color-border)",
-                    background: "var(--color-popover)",
-                  }}
-                />
-                <Bar dataKey="revenue" fill="var(--color-accent)" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            <Suspense fallback={<ChartFallback />}>
+              <LazyRevenueBarChart data={revenue} />
+            </Suspense>
           </div>
         </div>
       </div>

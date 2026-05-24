@@ -1,6 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
-import { CheckCircle2, Dumbbell, Flame } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  CheckCircle2,
+  Clock3,
+  Dumbbell,
+  Flame,
+  LocateFixed,
+  MapPin,
+  Navigation,
+  ShieldCheck,
+  XCircle,
+} from "lucide-react";
 import { PageHeader } from "@/components/app-shell";
 import {
   Dialog,
@@ -15,6 +25,16 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useApiResource } from "@/hooks/use-api-resource";
 import type { Workout } from "@/lib/live-data";
+import {
+  calculateDistanceMeters,
+  defaultGymSettings,
+  formatDistance,
+  readAttendanceHistory,
+  readGymSettings,
+  saveAttendanceHistory,
+  type AttendanceHistoryEntry,
+  type GymLocationSettings,
+} from "@/lib/attendance";
 
 export const Route = createFileRoute("/client/")({
   component: ClientWorkouts,
@@ -38,6 +58,17 @@ function ClientWorkouts() {
   const [issue, setIssue] = useState<Issue>("No issue");
   const [otherIssue, setOtherIssue] = useState("");
   const [notes, setNotes] = useState("");
+  const [gymSettings, setGymSettings] = useState<GymLocationSettings>(defaultGymSettings);
+  const [attendanceHistory, setAttendanceHistory] = useState<AttendanceHistoryEntry[]>([]);
+  const [clientLocation, setClientLocation] = useState<{ latitude: number; longitude: number }>();
+  const [attendanceStatus, setAttendanceStatus] = useState<
+    "idle" | "checking" | "verified" | "denied"
+  >("idle");
+
+  useEffect(() => {
+    setGymSettings(readGymSettings());
+    setAttendanceHistory(readAttendanceHistory());
+  }, []);
 
   const open = !!activeId;
   const close = () => {
@@ -71,6 +102,58 @@ function ClientWorkouts() {
   const doneCount = Object.values(completed).filter(Boolean).length;
   const total = workout.exercises.length;
   const pct = Math.round((doneCount / total) * 100);
+  const currentDistance = useMemo(() => {
+    if (!clientLocation) return undefined;
+    return calculateDistanceMeters(gymSettings, clientLocation);
+  }, [clientLocation, gymSettings]);
+  const insideRadius = currentDistance !== undefined && currentDistance <= gymSettings.radiusMeters;
+  const clientHistory = attendanceHistory
+    .filter((entry) => entry.clientId === "client-1")
+    .slice(0, 4);
+
+  const markAttendance = () => {
+    if (!navigator.geolocation) {
+      toast.error("Location access is not available on this device.");
+      return;
+    }
+
+    setAttendanceStatus("checking");
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const location = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        };
+        const distance = calculateDistanceMeters(gymSettings, location);
+        const verified = distance <= gymSettings.radiusMeters;
+        const entry: AttendanceHistoryEntry = {
+          id: `att-${Date.now()}`,
+          clientId: "client-1",
+          clientName: "Aarav Mehta",
+          status: verified ? "Verified" : "Denied",
+          distanceMeters: distance,
+          checkedInAt: new Date().toISOString(),
+          method: "GPS",
+        };
+        const nextHistory = [entry, ...attendanceHistory].slice(0, 12);
+
+        setClientLocation(location);
+        setAttendanceStatus(verified ? "verified" : "denied");
+        setAttendanceHistory(nextHistory);
+        saveAttendanceHistory(nextHistory);
+        toast[verified ? "success" : "error"](
+          verified
+            ? "Attendance verified. You're inside the gym radius."
+            : "Attendance denied. Move closer to the gym location.",
+        );
+      },
+      () => {
+        setAttendanceStatus("idle");
+        toast.error("Location permission was denied or unavailable.");
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+    );
+  };
 
   return (
     <div>
@@ -78,6 +161,103 @@ function ClientWorkouts() {
         title="Today's workout"
         description="Tap done after each exercise — we'll log your feedback in seconds."
       />
+
+      <div className="mb-6 grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.85fr)]">
+        <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-card">
+          <div className="border-b border-border bg-gradient-to-r from-primary/12 via-card to-accent/10 p-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                  <MapPin className="h-3.5 w-3.5" />
+                  Smart location attendance
+                </div>
+                <h2 className="text-xl font-semibold tracking-tight">Today's check-in</h2>
+                <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+                  Verify from your device location within {formatDistance(gymSettings.radiusMeters)}{" "}
+                  of {gymSettings.name}.
+                </p>
+              </div>
+              <AttendanceBadge status={attendanceStatus} />
+            </div>
+          </div>
+          <div className="grid gap-4 p-5 md:grid-cols-[minmax(0,1fr)_220px]">
+            <div className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <MetricTile
+                  label="Gym radius"
+                  value={formatDistance(gymSettings.radiusMeters)}
+                  icon={<LocateFixed className="h-4 w-4" />}
+                />
+                <MetricTile
+                  label="Your distance"
+                  value={
+                    currentDistance === undefined ? "Waiting" : formatDistance(currentDistance)
+                  }
+                  icon={<Navigation className="h-4 w-4" />}
+                />
+                <MetricTile
+                  label="Status"
+                  value={
+                    attendanceStatus === "verified"
+                      ? "Verified"
+                      : attendanceStatus === "denied"
+                        ? "Denied"
+                        : "Ready"
+                  }
+                  icon={
+                    attendanceStatus === "denied" ? (
+                      <XCircle className="h-4 w-4" />
+                    ) : (
+                      <ShieldCheck className="h-4 w-4" />
+                    )
+                  }
+                />
+              </div>
+
+              <div
+                className={cn(
+                  "rounded-xl border p-4 text-sm",
+                  attendanceStatus === "verified"
+                    ? "border-success/30 bg-success/10 text-success"
+                    : attendanceStatus === "denied"
+                      ? "border-destructive/30 bg-destructive/10 text-destructive"
+                      : "border-border bg-muted/45 text-muted-foreground",
+                )}
+              >
+                {currentDistance === undefined
+                  ? "Tap Mark Attendance to request location access and calculate your real-time gym distance."
+                  : insideRadius
+                    ? `You are ${formatDistance(currentDistance)} away, inside the approved radius.`
+                    : `You are ${formatDistance(currentDistance)} away, outside the approved radius.`}
+              </div>
+            </div>
+
+            <div className="flex flex-col justify-between rounded-xl border border-border bg-background p-4">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Gym location
+                </p>
+                <p className="mt-1 font-semibold">{gymSettings.name}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{gymSettings.address}</p>
+              </div>
+              <button
+                onClick={markAttendance}
+                disabled={attendanceStatus === "checking"}
+                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-card transition hover:bg-primary/90 disabled:opacity-70"
+              >
+                {attendanceStatus === "checking" ? (
+                  <Clock3 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <MapPin className="h-4 w-4" />
+                )}
+                {attendanceStatus === "checking" ? "Checking location" : "Mark Attendance"}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <AttendanceHistoryCard entries={clientHistory} />
+      </div>
 
       <div className="mb-6 rounded-2xl border border-border bg-gradient-primary p-6 text-primary-foreground shadow-card">
         <div className="flex items-start justify-between gap-4">
@@ -234,6 +414,101 @@ function ClientWorkouts() {
           </form>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function AttendanceBadge({ status }: { status: "idle" | "checking" | "verified" | "denied" }) {
+  const styles = {
+    idle: "bg-muted text-muted-foreground",
+    checking: "bg-info/15 text-info",
+    verified: "bg-success/15 text-success",
+    denied: "bg-destructive/15 text-destructive",
+  };
+  const label = {
+    idle: "Not marked",
+    checking: "Verifying",
+    verified: "Verified attendance",
+    denied: "Outside radius",
+  };
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold",
+        styles[status],
+      )}
+    >
+      {status === "denied" ? (
+        <XCircle className="h-3.5 w-3.5" />
+      ) : (
+        <ShieldCheck className="h-3.5 w-3.5" />
+      )}
+      {label[status]}
+    </span>
+  );
+}
+
+function MetricTile({ label, value, icon }: { label: string; value: string; icon: ReactNode }) {
+  return (
+    <div className="rounded-xl border border-border bg-background p-3">
+      <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+        {icon}
+      </div>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1 text-lg font-semibold tracking-tight">{value}</p>
+    </div>
+  );
+}
+
+function AttendanceHistoryCard({ entries }: { entries: AttendanceHistoryEntry[] }) {
+  return (
+    <div className="rounded-2xl border border-border bg-card p-5 shadow-card">
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-muted-foreground">Attendance history</p>
+          <h3 className="text-lg font-semibold">Recent check-ins</h3>
+        </div>
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/15 text-accent">
+          <Clock3 className="h-5 w-5" />
+        </span>
+      </div>
+      <ul className="space-y-3">
+        {entries.map((entry) => (
+          <li
+            key={entry.id}
+            className="flex items-center justify-between gap-3 rounded-xl bg-muted/45 p-3"
+          >
+            <div className="min-w-0">
+              <p className="text-sm font-medium">
+                {new Date(entry.checkedInAt).toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                })}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {new Date(entry.checkedInAt).toLocaleTimeString("en-US", {
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}{" "}
+                - {formatDistance(entry.distanceMeters)}
+              </p>
+            </div>
+            <span
+              className={cn(
+                "rounded-full px-2.5 py-1 text-xs font-semibold",
+                entry.status === "Verified"
+                  ? "bg-success/15 text-success"
+                  : entry.status === "Denied"
+                    ? "bg-destructive/15 text-destructive"
+                    : "bg-info/15 text-info",
+              )}
+            >
+              {entry.status}
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

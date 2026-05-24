@@ -1,27 +1,23 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import type React from "react";
+import { Suspense, type ReactNode } from "react";
 import {
   Users,
   Activity,
   CalendarCheck,
   AlertCircle,
   Flame,
+  LocateFixed,
+  MapPin,
   MessageSquareHeart,
 } from "lucide-react";
 import { PageHeader, StatCard } from "@/components/app-shell";
 import { StatusBadge } from "@/components/status-badge";
 import { feedbackTone } from "@/lib/feedback-utils";
 import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-  Tooltip,
-  BarChart,
-  Bar,
-} from "recharts";
+  ChartFallback,
+  LazyAttendanceAreaChart,
+  LazyRevenueBarChart,
+} from "@/components/charts/lazy-metric-charts";
 import { useApiResource } from "@/hooks/use-api-resource";
 import {
   emptyTrend,
@@ -31,6 +27,7 @@ import {
   type PaymentRecord,
 } from "@/lib/live-data";
 import { toCurrency } from "@/lib/api";
+import { formatDistance, readAttendanceHistory, readGymSettings } from "@/lib/attendance";
 
 export const Route = createFileRoute("/trainer/")({
   component: TrainerDashboard,
@@ -47,6 +44,13 @@ function TrainerDashboard() {
     (c) => c.status === "Inactive" || c.lastVisit?.includes("days"),
   );
   const revenue = paymentTrend(payments);
+  const gymSettings = readGymSettings();
+  const attendanceHistory = readAttendanceHistory();
+  const verifiedToday = attendanceHistory.filter(
+    (entry) =>
+      entry.status === "Verified" &&
+      new Date(entry.checkedInAt).toDateString() === new Date().toDateString(),
+  ).length;
 
   return (
     <div>
@@ -57,7 +61,12 @@ function TrainerDashboard() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Total clients" value={total} icon={Users} tone="primary" />
         <StatCard label="Active clients" value={active} icon={Activity} tone="success" />
-        <StatCard label="Today's attendance" value={0} icon={CalendarCheck} tone="info" />
+        <StatCard
+          label="Today's attendance"
+          value={verifiedToday}
+          icon={CalendarCheck}
+          tone="info"
+        />
         <StatCard
           label="Pending payments"
           value={pendingPayments}
@@ -76,48 +85,9 @@ function TrainerDashboard() {
             <Flame className="h-5 w-5 text-accent" />
           </div>
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={emptyTrend} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="att2" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.35} />
-                    <stop offset="95%" stopColor="var(--color-primary)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="var(--color-border)"
-                  vertical={false}
-                />
-                <XAxis
-                  dataKey="day"
-                  stroke="var(--color-muted-foreground)"
-                  fontSize={12}
-                  tickLine={false}
-                  axisLine={false}
-                />
-                <YAxis
-                  stroke="var(--color-muted-foreground)"
-                  fontSize={12}
-                  tickLine={false}
-                  axisLine={false}
-                />
-                <Tooltip
-                  contentStyle={{
-                    borderRadius: 12,
-                    border: "1px solid var(--color-border)",
-                    background: "var(--color-popover)",
-                  }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="visits"
-                  stroke="var(--color-primary)"
-                  strokeWidth={2}
-                  fill="url(#att2)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+            <Suspense fallback={<ChartFallback />}>
+              <LazyAttendanceAreaChart data={emptyTrend} gradientId="trainer-attendance" />
+            </Suspense>
           </div>
         </div>
 
@@ -126,41 +96,40 @@ function TrainerDashboard() {
             <p className="text-sm font-medium text-muted-foreground">Revenue overview</p>
           </div>
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={revenue} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="var(--color-border)"
-                  vertical={false}
-                />
-                <XAxis
-                  dataKey="month"
-                  stroke="var(--color-muted-foreground)"
-                  fontSize={12}
-                  tickLine={false}
-                  axisLine={false}
-                />
-                <YAxis
-                  stroke="var(--color-muted-foreground)"
-                  fontSize={12}
-                  tickLine={false}
-                  axisLine={false}
-                />
-                <Tooltip
-                  contentStyle={{
-                    borderRadius: 12,
-                    border: "1px solid var(--color-border)",
-                    background: "var(--color-popover)",
-                  }}
-                />
-                <Bar dataKey="revenue" fill="var(--color-accent)" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            <Suspense fallback={<ChartFallback />}>
+              <LazyRevenueBarChart data={revenue} />
+            </Suspense>
           </div>
         </div>
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
+        <div className="rounded-2xl border border-border bg-card p-5 shadow-card">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Gym Location Settings</p>
+              <p className="text-lg font-semibold">Attendance zone</p>
+            </div>
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <MapPin className="h-5 w-5" />
+            </span>
+          </div>
+          <div className="rounded-xl border border-border bg-muted/40 p-3">
+            <p className="text-sm font-semibold">{gymSettings.name}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{gymSettings.address}</p>
+            <div className="mt-3 flex items-center gap-2 text-xs font-medium text-primary">
+              <LocateFixed className="h-3.5 w-3.5" />
+              Radius {formatDistance(gymSettings.radiusMeters)}
+            </div>
+          </div>
+          <Link
+            to="/trainer/attendance"
+            className="mt-4 inline-flex w-full items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-soft transition hover:bg-primary/90"
+          >
+            Configure location
+          </Link>
+        </div>
+
         <DashboardList title="Clients not visited recently" to="/trainer/clients">
           {inactiveClients.slice(0, 4).map((c) => (
             <li key={c.id} className="flex items-center justify-between gap-3">
@@ -248,8 +217,8 @@ function DashboardList({
 }: {
   title: string;
   to: string;
-  icon?: React.ReactNode;
-  children: React.ReactNode;
+  icon?: ReactNode;
+  children: ReactNode;
 }) {
   return (
     <div className="rounded-2xl border border-border bg-card p-5 shadow-card">

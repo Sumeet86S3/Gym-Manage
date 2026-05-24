@@ -12,6 +12,15 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useApiResource } from "@/hooks/use-api-resource";
@@ -36,6 +45,8 @@ function ClientsPage() {
   const [credentials, setCredentials] = useState<ClientCreateResponse["credentials"] | null>(null);
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState<Client | null>(null);
+  const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
+  const [deletingClient, setDeletingClient] = useState(false);
   const [editForm, setEditForm] = useState({
     name: "",
     email: "",
@@ -109,6 +120,21 @@ function ClientsPage() {
       toast.success("Client profile updated.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to update client.");
+    }
+  };
+
+  const deleteClient = async () => {
+    if (!clientToDelete) return;
+    setDeletingClient(true);
+    try {
+      await api(`/clients/${clientToDelete.id}`, { method: "DELETE" });
+      setClients((prev) => prev.filter((client) => client.id !== clientToDelete.id));
+      toast.success("Client removed.");
+      setClientToDelete(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to remove client.");
+    } finally {
+      setDeletingClient(false);
     }
   };
 
@@ -206,20 +232,9 @@ function ClientsPage() {
                         <Pencil className="h-4 w-4" />
                       </button>
                       <button
-                        onClick={() => {
-                          api(`/clients/${c.id}`, { method: "DELETE" })
-                            .then(() => {
-                              setClients((prev) => prev.filter((p) => p.id !== c.id));
-                              toast.success("Client removed.");
-                            })
-                            .catch((err) =>
-                              toast.error(
-                                err instanceof Error ? err.message : "Unable to remove client",
-                              ),
-                            );
-                        }}
+                        onClick={() => setClientToDelete(c)}
                         className="rounded-md p-1.5 text-destructive hover:bg-destructive/10"
-                        aria-label="Delete"
+                        aria-label={`Delete ${c.name}`}
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -309,6 +324,34 @@ function ClientsPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={Boolean(clientToDelete)}
+        onOpenChange={(next) => {
+          if (!next && !deletingClient) setClientToDelete(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete client?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove {clientToDelete?.name ?? "this client"} from your active client list.
+              Their related records stay preserved in the database.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingClient}>Cancel</AlertDialogCancel>
+            <button
+              type="button"
+              onClick={deleteClient}
+              disabled={deletingClient}
+              className="inline-flex h-9 items-center justify-center rounded-md bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground shadow transition-colors hover:bg-destructive/90 disabled:pointer-events-none disabled:opacity-50"
+            >
+              {deletingClient ? "Deleting..." : "Delete client"}
+            </button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={Boolean(editing)} onOpenChange={(next) => !next && setEditing(null)}>
         <DialogContent>
