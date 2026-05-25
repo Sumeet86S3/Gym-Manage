@@ -3,7 +3,12 @@ import { env } from "../config/env.js";
 
 export function signAccessToken(user) {
   return jwt.sign(
-    { sub: user.id, role: user.role, approvalStatus: user.approvalStatus },
+    {
+      sub: user.id,
+      role: user.role,
+      approvalStatus: user.approvalStatus,
+      tokenVersion: user.tokenVersion,
+    },
     env.JWT_ACCESS_SECRET,
     { expiresIn: env.JWT_ACCESS_EXPIRES_IN },
   );

@@ -13,6 +13,7 @@ export async function authenticate(req, _res, next) {
     const payload = verifyAccessToken(token);
     const [user] = await db.select().from(users).where(eq(users.id, payload.sub)).limit(1);
     if (!user || user.deletedAt) throw new AppError("User not found", 401);
+    if (payload.tokenVersion !== user.tokenVersion) throw new AppError("Invalid token", 401);
 
     req.user = user;
     next();

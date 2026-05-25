@@ -28,8 +28,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api<{ user: AuthUser }>("/auth/me")
-      .then((data) => setUser(normalizeUser(data.user)))
+    api<AuthUser>("/auth/me")
+      .then((data) => setUser(normalizeUser(data)))
       .catch(async () => {
         try {
           const data = await api<{ user: AuthUser; accessToken: string }>("/auth/refresh", {
