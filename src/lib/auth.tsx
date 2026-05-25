@@ -30,9 +30,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     api<{ user: AuthUser }>("/auth/me")
       .then((data) => setUser(normalizeUser(data.user)))
-      .catch(() => {
-        setAccessToken(null);
-        setUser(null);
+      .catch(async () => {
+        try {
+          const data = await api<{ user: AuthUser; accessToken: string }>("/auth/refresh", {
+            method: "POST",
+          });
+          setAccessToken(data.accessToken);
+          setUser(normalizeUser(data.user));
+        } catch {
+          setAccessToken(null);
+          setUser(null);
+        }
       })
       .finally(() => setLoading(false));
   }, []);
