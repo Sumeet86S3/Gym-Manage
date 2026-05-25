@@ -26,7 +26,12 @@ app.use(helmet());
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || env.corsOrigins.includes("*") || env.corsOrigins.includes(origin)) {
+      const originAllowed =
+        env.corsOrigins.includes("*") ||
+        env.corsOrigins.includes(origin) ||
+        env.corsOriginPatterns.some((pattern) => pattern.test(origin));
+
+      if (!origin || originAllowed) {
         return callback(null, true);
       }
       callback(new Error("Not allowed by CORS"));

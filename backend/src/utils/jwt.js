@@ -27,12 +27,16 @@ export function setRefreshCookie(res, token) {
   res.cookie("refreshToken", token, {
     httpOnly: true,
     secure: env.COOKIE_SECURE,
-    sameSite: env.isProduction ? "strict" : "lax",
+    sameSite: env.isProduction ? "none" : "lax",
     path: "/api/v1/auth",
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 }
 
 export function clearRefreshCookie(res) {
-  res.clearCookie("refreshToken", { path: "/api/v1/auth" });
+  res.clearCookie("refreshToken", {
+    secure: env.COOKIE_SECURE,
+    sameSite: env.isProduction ? "none" : "lax",
+    path: "/api/v1/auth",
+  });
 }

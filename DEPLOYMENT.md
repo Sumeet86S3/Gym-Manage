@@ -16,7 +16,9 @@ This project uses TanStack Start. Nitro is included in `vite.config.ts` for Verc
 1. Create a new Blueprint in Render from this GitHub repository, or create a Web Service manually.
 2. If using Blueprint, Render will read `render.yaml`.
 3. Fill all `sync: false` environment variables in the Render dashboard.
-4. After Vercel deploys, update `CORS_ORIGIN` to the Vercel frontend URL.
+4. After Vercel deploys, update `CORS_ORIGIN` to the Vercel frontend URL. For Vercel
+   preview deployments, you can include a wildcard origin too:
+   `https://your-production-domain.vercel.app,https://*.vercel.app`
 5. Confirm the health endpoint responds:
    `https://your-render-backend.onrender.com/api/v1/health`
 

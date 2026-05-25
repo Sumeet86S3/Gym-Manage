@@ -32,10 +32,21 @@ if (!parsed.success) {
   process.exit(1);
 }
 
+const corsOrigins = parsed.success
+  ? parsed.data.CORS_ORIGIN.split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean)
+  : [];
+
+function originPattern(origin) {
+  if (!origin.includes("*")) return null;
+  const escaped = origin.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
+  return new RegExp(`^${escaped}$`);
+}
+
 export const env = {
   ...parsed.data,
   isProduction: parsed.data.NODE_ENV === "production",
-  corsOrigins: parsed.data.CORS_ORIGIN.split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean),
+  corsOrigins,
+  corsOriginPatterns: corsOrigins.map(originPattern).filter(Boolean),
 };
