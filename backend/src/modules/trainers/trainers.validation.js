@@ -12,3 +12,7 @@ export const listTrainersSchema = z.object({
     status: z.enum(["Pending", "Approved", "Rejected", "All"]).optional(),
   }),
 });
+
+export const trainerIdSchema = z.object({
+  params: z.object({ id: z.string().min(1) }),
+});

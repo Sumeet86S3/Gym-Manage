@@ -2,6 +2,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { db } from "../../config/db.js";
 import { clients, trainers, users } from "../../db/schema.js";
 import { AppError } from "../../utils/AppError.js";
+import { deleteTrainerCascade } from "../../services/cascade-delete.service.js";
 
 export async function list({ status }) {
   const rows = await db
@@ -63,4 +64,8 @@ export async function updateStatus(id, status) {
     .where(eq(users.id, trainer.userId));
 
   return getById(updated.id);
+}
+
+export async function remove(id) {
+  return deleteTrainerCascade(id);
 }

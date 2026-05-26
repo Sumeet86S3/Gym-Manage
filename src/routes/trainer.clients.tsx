@@ -335,8 +335,8 @@ function ClientsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete client?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will remove {clientToDelete?.name ?? "this client"} from your active client list.
-              Their related records stay preserved in the database.
+              This permanently deletes {clientToDelete?.name ?? "this client"} and their workouts,
+              goals, payments, feedback, measurements, attendance, meals, and active sessions.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

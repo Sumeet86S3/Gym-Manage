@@ -17,3 +17,7 @@ export const updateStatus = asyncHandler(async (req, res) => {
     "Trainer status updated",
   );
 });
+
+export const remove = asyncHandler(async (req, res) => {
+  success(res, await service.remove(req.validated.params.id), "Trainer deleted");
+});

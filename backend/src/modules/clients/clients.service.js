@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { db } from "../../config/db.js";
 import { clients, payments, trainers, users } from "../../db/schema.js";
 import { AppError } from "../../utils/AppError.js";
+import { deleteClientCascade } from "../../services/cascade-delete.service.js";
 import { dateOnly, nextMonthlyDueDate, refreshBillingStatuses } from "../payments/billing.js";
 
 const SALT_ROUNDS = 12;
@@ -170,8 +171,7 @@ export async function update(user, id, input) {
 
 export async function remove(user, id) {
   await getById(user, id);
-  await db.update(clients).set({ deletedAt: new Date().toISOString() }).where(eq(clients.id, id));
-  return { deleted: true };
+  return db.transaction((tx) => deleteClientCascade(id, tx));
 }
 
 function generateClientPassword(name) {

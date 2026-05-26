@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
+import { eq } from "drizzle-orm";
 
 process.env.NODE_ENV = "test";
 process.env.JWT_ACCESS_SECRET = "test-access-secret-that-is-at-least-32-chars";
@@ -12,9 +13,25 @@ process.env.IMAGEKIT_PRIVATE_KEY = "test-private";
 await import("../scripts/migrate.js");
 
 const { db } = await import("../src/config/db.js");
-const { users, trainers, clients, workouts, exercises } = await import("../src/db/schema.js");
+const {
+  attendance,
+  clients,
+  exercises,
+  feedback,
+  goals,
+  mealLogs,
+  measurements,
+  notifications,
+  payments,
+  refreshSessions,
+  trainers,
+  users,
+  workouts,
+} = await import("../src/db/schema.js");
 const paymentsService = await import("../src/modules/payments/payments.service.js");
 const goalsService = await import("../src/modules/goals/goals.service.js");
+const clientsService = await import("../src/modules/clients/clients.service.js");
+const trainersService = await import("../src/modules/trainers/trainers.service.js");
 const workoutsService = await import("../src/modules/workouts/workouts.service.js");
 
 const now = new Date().toISOString();
@@ -109,14 +126,47 @@ test("trainer cannot assign workouts to another trainer's client", async () => {
 
 test("client feedback requires workout ownership and exercise membership", async () => {
   await assert.rejects(
-    workoutsService.submitFeedback(clientUserA, ids.exerciseB, feedback(ids.workoutB)),
+    workoutsService.submitFeedback(clientUserA, ids.exerciseB, feedbackInput(ids.workoutB)),
     (error) => error.statusCode === 403,
   );
 
   await assert.rejects(
-    workoutsService.submitFeedback(clientUserA, ids.exerciseB, feedback(ids.workoutA)),
+    workoutsService.submitFeedback(clientUserA, ids.exerciseB, feedbackInput(ids.workoutA)),
     (error) => error.statusCode === 403,
   );
+});
+
+test("trainer cannot delete another trainer's client", async () => {
+  await assert.rejects(
+    clientsService.remove(trainerUserA, ids.clientB),
+    (error) => error.statusCode === 404,
+  );
+});
+
+test("trainer deleting owned client cascades all dependent records", async () => {
+  const fixture = await createCascadeFixture("client-delete", ids.trainerA, ids.trainerUserA);
+
+  await clientsService.remove(trainerUserA, fixture.clientId);
+
+  await assertNoClientRows(fixture.clientId, fixture.clientUserId, fixture.workoutId);
+  assert.equal(await countRows(users, users.id, fixture.clientUserId), 0);
+  assert.equal(await countRows(trainers, trainers.id, ids.trainerA), 1);
+});
+
+test("admin deleting trainer cascades trainer clients and dependent records", async () => {
+  const trainerUserId = randomUUID();
+  const trainerId = randomUUID();
+  await db.insert(users).values(user(trainerUserId, "delete-trainer@test.local", "trainer"));
+  await db.insert(trainers).values(trainer(trainerId, trainerUserId));
+  const fixtureA = await createCascadeFixture("trainer-delete-a", trainerId, trainerUserId);
+  const fixtureB = await createCascadeFixture("trainer-delete-b", trainerId, trainerUserId);
+
+  await trainersService.remove(trainerId);
+
+  await assertNoClientRows(fixtureA.clientId, fixtureA.clientUserId, fixtureA.workoutId);
+  await assertNoClientRows(fixtureB.clientId, fixtureB.clientUserId, fixtureB.workoutId);
+  assert.equal(await countRows(users, users.id, trainerUserId), 0);
+  assert.equal(await countRows(trainers, trainers.id, trainerId), 0);
 });
 
 function user(id, email, role) {
@@ -204,12 +254,122 @@ function goal(clientId, title) {
   };
 }
 
-function feedback(workoutId) {
+function feedbackInput(workoutId) {
   return {
     workoutId,
     difficulty: "Moderate",
     energy: "Normal",
     issue: "No issue",
     notes: "ok",
+  };
+}
+
+async function createCascadeFixture(label, trainerId, trainerUserId) {
+  const clientUserId = randomUUID();
+  const clientId = randomUUID();
+  const workoutId = randomUUID();
+  const exerciseId = randomUUID();
+  await db.insert(users).values(user(clientUserId, `${label}-client@test.local`, "client"));
+  await db.insert(clients).values(client(clientId, clientUserId, trainerId, `${label} Client`));
+  await db.insert(workouts).values(workout(workoutId, trainerId, clientId));
+  await db.insert(exercises).values(exercise(exerciseId, workoutId));
+  await db.insert(feedback).values({
+    id: randomUUID(),
+    clientId,
+    workoutId,
+    exerciseId,
+    difficulty: "Moderate",
+    energy: "Normal",
+    issue: "No issue",
+    createdAt: now,
+    updatedAt: now,
+  });
+  await db.insert(goals).values({
+    id: randomUUID(),
+    ...goal(clientId, `${label} Goal`),
+    createdAt: now,
+    updatedAt: now,
+  });
+  await db.insert(payments).values({
+    id: randomUUID(),
+    clientId,
+    amount: 1000,
+    currency: "INR",
+    plan: "Monthly",
+    status: "Paid",
+    createdAt: now,
+    updatedAt: now,
+  });
+  await db.insert(measurements).values({
+    id: randomUUID(),
+    clientId,
+    weight: 70,
+    measuredAt: now,
+    createdAt: now,
+    updatedAt: now,
+  });
+  await db.insert(mealLogs).values({
+    id: randomUUID(),
+    clientId,
+    type: "Lunch",
+    imageUrl: "https://example.com/meal.jpg",
+    loggedAt: now,
+    createdAt: now,
+    updatedAt: now,
+  });
+  await db.insert(attendance).values({
+    id: randomUUID(),
+    clientId,
+    trainerId,
+    date: now.slice(0, 10),
+    markedAt: now,
+    createdAt: now,
+    updatedAt: now,
+  });
+  await db.insert(refreshSessions).values([
+    refreshSession(clientUserId),
+    refreshSession(trainerUserId),
+  ]);
+  await db.insert(notifications).values({
+    id: randomUUID(),
+    userId: clientUserId,
+    type: "test",
+    title: "Test",
+    body: "Test",
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  return { clientId, clientUserId, workoutId };
+}
+
+async function assertNoClientRows(clientId, clientUserId, workoutId) {
+  assert.equal(await countRows(clients, clients.id, clientId), 0);
+  assert.equal(await countRows(workouts, workouts.id, workoutId), 0);
+  assert.equal(await countRows(exercises, exercises.workoutId, workoutId), 0);
+  assert.equal(await countRows(feedback, feedback.clientId, clientId), 0);
+  assert.equal(await countRows(goals, goals.clientId, clientId), 0);
+  assert.equal(await countRows(payments, payments.clientId, clientId), 0);
+  assert.equal(await countRows(measurements, measurements.clientId, clientId), 0);
+  assert.equal(await countRows(mealLogs, mealLogs.clientId, clientId), 0);
+  assert.equal(await countRows(attendance, attendance.clientId, clientId), 0);
+  assert.equal(await countRows(refreshSessions, refreshSessions.userId, clientUserId), 0);
+  assert.equal(await countRows(notifications, notifications.userId, clientUserId), 0);
+}
+
+async function countRows(table, column, value) {
+  const rows = await db.select().from(table).where(eq(column, value));
+  return rows.length;
+}
+
+function refreshSession(userId) {
+  return {
+    id: randomUUID(),
+    userId,
+    tokenId: randomUUID(),
+    tokenHash: randomUUID(),
+    expiresAt: new Date(Date.now() + 86400000).toISOString(),
+    createdAt: now,
+    updatedAt: now,
   };
 }
