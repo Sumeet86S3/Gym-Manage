@@ -6,9 +6,7 @@ const canUseServiceWorker =
   typeof window !== "undefined" && "serviceWorker" in navigator && window.isSecureContext;
 
 export function PwaStatus() {
-  const [online, setOnline] = useState(() =>
-    typeof navigator === "undefined" ? true : navigator.onLine,
-  );
+  const [showOffline, setShowOffline] = useState(false);
 
   useEffect(() => {
     if (!canUseServiceWorker) return;
@@ -38,8 +36,10 @@ export function PwaStatus() {
   }, []);
 
   useEffect(() => {
-    const handleOnline = () => setOnline(true);
-    const handleOffline = () => setOnline(false);
+    const handleOnline = () => setShowOffline(false);
+    const handleOffline = () => {
+      void verifyOffline().then(setShowOffline);
+    };
 
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
@@ -50,7 +50,7 @@ export function PwaStatus() {
     };
   }, []);
 
-  if (online) return null;
+  if (!showOffline) return null;
 
   return (
     <div
@@ -64,4 +64,21 @@ export function PwaStatus() {
       </div>
     </div>
   );
+}
+
+async function verifyOffline() {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 3000);
+
+  try {
+    await fetch(`/manifest.webmanifest?online-check=${Date.now()}`, {
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    return false;
+  } catch {
+    return true;
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }

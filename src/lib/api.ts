@@ -52,18 +52,14 @@ async function request<T>(
       credentials: "include",
       cache: "no-store",
     });
-  } catch (error) {
-    if (isOffline()) {
-      throw new ApiError("You appear to be offline. Reconnect to load live FitSphere data.", 0);
-    }
-
-    throw error;
+  } catch {
+    throw new ApiError("Unable to reach FitSphere. Reconnect to load live data.", 0);
   }
 
   if (response.status === 204) return null as T;
 
   const payload = await response.json().catch(() => null);
-  if (response.status === 401 && allowRefresh && path !== "/auth/refresh" && !isOffline()) {
+  if (response.status === 401 && allowRefresh && path !== "/auth/refresh") {
     const refreshedToken = await refreshAccessToken();
     if (refreshedToken) return request<T>(path, options, false);
   }
@@ -76,8 +72,6 @@ async function request<T>(
 }
 
 export async function refreshAccessToken() {
-  if (isOffline()) return null;
-
   if (!refreshPromise) {
     refreshPromise = request<{ user: unknown; accessToken: string }>(
       "/auth/refresh",
@@ -111,8 +105,4 @@ export function formatDateLabel(value?: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" });
-}
-
-function isOffline() {
-  return typeof navigator !== "undefined" && !navigator.onLine;
 }

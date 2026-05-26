@@ -10,7 +10,7 @@ export function createQueryClient() {
           const status =
             error && typeof error === "object" && "status" in error ? error.status : null;
           if (status === 0) return false;
-          return typeof navigator === "undefined" || navigator.onLine;
+          return true;
         },
         refetchOnWindowFocus: true,
         refetchOnReconnect: true,
