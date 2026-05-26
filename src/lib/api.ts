@@ -1,5 +1,6 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000/api/v1";
 const LEGACY_TOKEN_KEY = "fitsphere_access_token";
+const SESSION_TOKEN_KEY = "fitsphere_session_token";
 let accessToken: string | null = null;
 let refreshPromise: Promise<string | null> | null = null;
 let refreshError: unknown = null;
@@ -23,12 +24,33 @@ export class ApiError extends Error {
 }
 
 export function getAccessToken() {
-  return accessToken;
+  // Return in-memory token if available
+  if (accessToken) return accessToken;
+  
+  // Fallback to sessionStorage (useful for page reloads)
+  if (typeof window !== "undefined") {
+    const storedToken = window.sessionStorage.getItem(SESSION_TOKEN_KEY);
+    if (storedToken) {
+      accessToken = storedToken;
+      return storedToken;
+    }
+  }
+  
+  return null;
 }
 
 export function setAccessToken(token: string | null) {
   accessToken = token;
-  if (typeof window !== "undefined") window.localStorage.removeItem(LEGACY_TOKEN_KEY);
+  if (typeof window !== "undefined") {
+    window.localStorage.removeItem(LEGACY_TOKEN_KEY);
+    if (token) {
+      // Store in sessionStorage for recovery on page reload
+      window.sessionStorage.setItem(SESSION_TOKEN_KEY, token);
+    } else {
+      // Clear sessionStorage when logging out
+      window.sessionStorage.removeItem(SESSION_TOKEN_KEY);
+    }
+  }
 }
 
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
