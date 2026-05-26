@@ -27,7 +27,7 @@ import {
   type PaymentRecord,
 } from "@/lib/live-data";
 import { toCurrency } from "@/lib/api";
-import { formatDistance, readAttendanceHistory, readGymSettings } from "@/lib/attendance";
+import { formatDistance, readGymSettings, useAttendance } from "@/lib/attendance";
 
 export const Route = createFileRoute("/trainer/")({
   component: TrainerDashboard,
@@ -37,6 +37,7 @@ function TrainerDashboard() {
   const { data: clients } = useApiResource<Client[]>("/clients", []);
   const { data: feedback } = useApiResource<FeedbackEntry[]>("/feedback", []);
   const { data: payments } = useApiResource<PaymentRecord[]>("/payments", []);
+  const attendance = useAttendance();
   const total = clients.length;
   const active = clients.filter((c) => c.status === "Active").length;
   const pendingPayments = payments.filter((p) => p.status !== "Paid").length;
@@ -45,12 +46,7 @@ function TrainerDashboard() {
   );
   const revenue = paymentTrend(payments);
   const gymSettings = readGymSettings();
-  const attendanceHistory = readAttendanceHistory();
-  const verifiedToday = attendanceHistory.filter(
-    (entry) =>
-      entry.status === "Verified" &&
-      new Date(entry.checkedInAt).toDateString() === new Date().toDateString(),
-  ).length;
+  const verifiedToday = attendance.data?.entries.length ?? 0;
 
   return (
     <div>

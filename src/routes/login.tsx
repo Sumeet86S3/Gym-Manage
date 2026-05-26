@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Activity, ShieldCheck, UserCheck, Dumbbell, ArrowRight } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { ThemeToggle } from "@/lib/theme";
@@ -19,13 +19,23 @@ const roles: { id: UserRole; label: string; icon: typeof ShieldCheck; placeholde
 ];
 
 function LoginPage() {
-  const { login } = useAuth();
+  const { user, loading, login } = useAuth();
   const navigate = useNavigate();
   const [role, setRole] = useState<UserRole>("trainer");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!loading && user) {
+      const target =
+        user.role === "admin" ? "/admin" : user.role === "trainer" ? "/trainer" : "/client";
+      navigate({ to: target });
+    }
+  }, [user, loading, navigate]);
+
+  if (loading) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

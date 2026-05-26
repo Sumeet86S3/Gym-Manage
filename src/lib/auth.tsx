@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { UserRole } from "./types";
-import { api, refreshAccessToken, setAccessToken } from "./api";
+import { ApiError, api, refreshAccessToken, setAccessToken } from "./api";
 
 interface AuthUser {
   id: string;
@@ -11,11 +11,14 @@ interface AuthUser {
   role: UserRole;
   approved: boolean;
   approvalStatus?: "Pending" | "Approved" | "Rejected";
+  trainer?: { id: string } | null;
+  client?: { id: string } | null;
 }
 
 interface AuthContextValue {
   user: AuthUser | null;
   loading: boolean;
+  status: "restoring" | "authenticated" | "unauthenticated" | "offline";
   login: (email: string, password: string, role: UserRole) => Promise<AuthUser>;
   signupTrainer: (name: string, email: string, password: string) => Promise<AuthUser>;
   updateMe: (input: { name?: string; email?: string }) => Promise<AuthUser>;
@@ -27,27 +30,29 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState<AuthContextValue["status"]>("restoring");
+  const loading = status === "restoring";
 
   useEffect(() => {
     restoreSession();
   }, []);
 
   const restoreSession = async () => {
-    setLoading(true);
+    setStatus("restoring");
     try {
-      const token = await refreshAccessToken();
+      const token = await refreshAccessToken({ throwOnFailure: true });
       if (!token) {
         setUser(null);
+        setStatus("unauthenticated");
         return;
       }
       const data = await api<AuthUser>("/auth/me");
       setUser(normalizeUser(data));
-    } catch {
+      setStatus("authenticated");
+    } catch (error) {
       setAccessToken(null);
       setUser(null);
-    } finally {
-      setLoading(false);
+      setStatus(error instanceof ApiError && error.status === 0 ? "offline" : "unauthenticated");
     }
   };
 
@@ -59,6 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAccessToken(data.accessToken);
     const nextUser = normalizeUser(data.user);
     setUser(nextUser);
+    setStatus("authenticated");
     return nextUser;
   };
 
@@ -70,6 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAccessToken(data.accessToken);
     const nextUser = normalizeUser(data.user);
     setUser(nextUser);
+    setStatus("authenticated");
     return nextUser;
   };
 
@@ -80,6 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     const nextUser = normalizeUser(data);
     setUser(nextUser);
+    setStatus("authenticated");
     return nextUser;
   };
 
@@ -87,11 +95,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     api("/auth/logout", { method: "POST" }).catch(() => undefined);
     setAccessToken(null);
     setUser(null);
+    setStatus("unauthenticated");
     queryClient.clear();
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, signupTrainer, updateMe, logout }}>
+    <AuthContext.Provider
+      value={{ user, loading, status, login, signupTrainer, updateMe, logout }}
+    >
       {children}
     </AuthContext.Provider>
   );
@@ -106,6 +117,7 @@ export function useAuth() {
 function normalizeUser(user: AuthUser): AuthUser {
   return {
     ...user,
+    profileId: user.profileId ?? user.client?.id ?? user.trainer?.id ?? null,
     approved: user.approved ?? user.approvalStatus === "Approved",
   };
 }

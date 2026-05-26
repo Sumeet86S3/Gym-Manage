@@ -33,6 +33,7 @@ const goalsService = await import("../src/modules/goals/goals.service.js");
 const clientsService = await import("../src/modules/clients/clients.service.js");
 const trainersService = await import("../src/modules/trainers/trainers.service.js");
 const workoutsService = await import("../src/modules/workouts/workouts.service.js");
+const attendanceService = await import("../src/modules/attendance/attendance.service.js");
 
 const now = new Date().toISOString();
 const ids = {
@@ -134,6 +135,24 @@ test("client feedback requires workout ownership and exercise membership", async
     workoutsService.submitFeedback(clientUserA, ids.exerciseB, feedbackInput(ids.workoutA)),
     (error) => error.statusCode === 403,
   );
+});
+
+test("attendance is mark-once across trainer and client views", async () => {
+  const date = "2026-05-26";
+  const first = await attendanceService.toggle(trainerUserA, { clientId: ids.clientA, date });
+  const second = await attendanceService.toggle(clientUserA, { date });
+  const trainerView = await attendanceService.list(trainerUserA, date);
+  const clientView = await attendanceService.list(clientUserA, date);
+
+  assert.equal(first.marked, true);
+  assert.equal(first.alreadyMarked, false);
+  assert.equal(second.marked, true);
+  assert.equal(second.alreadyMarked, true);
+  assert.equal(second.entry.id, first.entry.id);
+  assert.equal(trainerView.entries.length, 1);
+  assert.equal(clientView.entries.length, 1);
+  assert.equal(clientView.todayEntry.id, first.entry.id);
+  assert.equal(await countRows(attendance, attendance.clientId, ids.clientA), 1);
 });
 
 test("trainer cannot delete another trainer's client", async () => {

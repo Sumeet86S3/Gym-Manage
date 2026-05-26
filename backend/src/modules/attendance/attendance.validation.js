@@ -8,7 +8,7 @@ export const listAttendanceSchema = z.object({
 
 export const markAttendanceSchema = z.object({
   body: z.object({
-    clientId: z.string().min(1),
+    clientId: z.string().min(1).optional(),
     date: z.string().optional(),
   }),
 });

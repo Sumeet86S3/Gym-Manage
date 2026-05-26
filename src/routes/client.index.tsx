@@ -29,9 +29,10 @@ import {
   calculateDistanceMeters,
   defaultGymSettings,
   formatDistance,
-  readAttendanceHistory,
   readGymSettings,
-  saveAttendanceHistory,
+  normalizeAttendanceEntry,
+  useAttendance,
+  useMarkAttendance,
   type AttendanceHistoryEntry,
   type GymLocationSettings,
 } from "@/lib/attendance";
@@ -59,15 +60,15 @@ function ClientWorkouts() {
   const [otherIssue, setOtherIssue] = useState("");
   const [notes, setNotes] = useState("");
   const [gymSettings, setGymSettings] = useState<GymLocationSettings>(defaultGymSettings);
-  const [attendanceHistory, setAttendanceHistory] = useState<AttendanceHistoryEntry[]>([]);
   const [clientLocation, setClientLocation] = useState<{ latitude: number; longitude: number }>();
   const [attendanceStatus, setAttendanceStatus] = useState<
     "idle" | "checking" | "verified" | "denied"
   >("idle");
+  const attendance = useAttendance();
+  const markAttendanceMutation = useMarkAttendance();
 
   useEffect(() => {
     setGymSettings(readGymSettings());
-    setAttendanceHistory(readAttendanceHistory());
   }, []);
 
   const open = !!activeId;
@@ -107,11 +108,15 @@ function ClientWorkouts() {
     return calculateDistanceMeters(gymSettings, clientLocation);
   }, [clientLocation, gymSettings]);
   const insideRadius = currentDistance !== undefined && currentDistance <= gymSettings.radiusMeters;
-  const clientHistory = attendanceHistory
-    .filter((entry) => entry.clientId === "client-1")
-    .slice(0, 4);
+  const attendanceEntries = (attendance.data?.entries ?? []).map(normalizeAttendanceEntry);
+  const todayEntry = attendance.data?.todayEntry
+    ? normalizeAttendanceEntry(attendance.data.todayEntry)
+    : attendanceEntries.find((entry) => isToday(entry.markedAt));
+  const alreadyMarked = Boolean(todayEntry);
+  const clientHistory = attendanceEntries.slice(0, 4);
 
   const markAttendance = () => {
+    if (alreadyMarked) return;
     if (!navigator.geolocation) {
       toast.error("Location access is not available on this device.");
       return;
@@ -126,26 +131,28 @@ function ClientWorkouts() {
         };
         const distance = calculateDistanceMeters(gymSettings, location);
         const verified = distance <= gymSettings.radiusMeters;
-        const entry: AttendanceHistoryEntry = {
-          id: `att-${Date.now()}`,
-          clientId: "client-1",
-          clientName: "Aarav Mehta",
-          status: verified ? "Verified" : "Denied",
-          distanceMeters: distance,
-          checkedInAt: new Date().toISOString(),
-          method: "GPS",
-        };
-        const nextHistory = [entry, ...attendanceHistory].slice(0, 12);
 
         setClientLocation(location);
-        setAttendanceStatus(verified ? "verified" : "denied");
-        setAttendanceHistory(nextHistory);
-        saveAttendanceHistory(nextHistory);
-        toast[verified ? "success" : "error"](
-          verified
-            ? "Attendance verified. You're inside the gym radius."
-            : "Attendance denied. Move closer to the gym location.",
-        );
+        if (!verified) {
+          setAttendanceStatus("denied");
+          toast.error("Attendance denied. Move closer to the gym location.");
+          return;
+        }
+
+        markAttendanceMutation.mutate(undefined, {
+          onSuccess: (result) => {
+            setAttendanceStatus("verified");
+            toast.success(
+              result.alreadyMarked
+                ? "Today attendance has been marked."
+                : "Attendance marked successfully.",
+            );
+          },
+          onError: (error) => {
+            setAttendanceStatus("idle");
+            toast.error(error instanceof Error ? error.message : "Unable to mark attendance.");
+          },
+        });
       },
       () => {
         setAttendanceStatus("idle");
@@ -177,7 +184,7 @@ function ClientWorkouts() {
                   of {gymSettings.name}.
                 </p>
               </div>
-              <AttendanceBadge status={attendanceStatus} />
+              <AttendanceBadge status={alreadyMarked ? "marked" : attendanceStatus} />
             </div>
           </div>
           <div className="grid gap-4 p-5 md:grid-cols-[minmax(0,1fr)_220px]">
@@ -198,7 +205,9 @@ function ClientWorkouts() {
                 <MetricTile
                   label="Status"
                   value={
-                    attendanceStatus === "verified"
+                    alreadyMarked
+                      ? "Marked"
+                      : attendanceStatus === "verified"
                       ? "Verified"
                       : attendanceStatus === "denied"
                         ? "Denied"
@@ -217,14 +226,16 @@ function ClientWorkouts() {
               <div
                 className={cn(
                   "rounded-xl border p-4 text-sm",
-                  attendanceStatus === "verified"
+                  alreadyMarked || attendanceStatus === "verified"
                     ? "border-success/30 bg-success/10 text-success"
                     : attendanceStatus === "denied"
                       ? "border-destructive/30 bg-destructive/10 text-destructive"
                       : "border-border bg-muted/45 text-muted-foreground",
                 )}
               >
-                {currentDistance === undefined
+                {alreadyMarked
+                  ? "Today attendance has been marked."
+                  : currentDistance === undefined
                   ? "Tap Mark Attendance to request location access and calculate your real-time gym distance."
                   : insideRadius
                     ? `You are ${formatDistance(currentDistance)} away, inside the approved radius.`
@@ -240,18 +251,26 @@ function ClientWorkouts() {
                 <p className="mt-1 font-semibold">{gymSettings.name}</p>
                 <p className="mt-1 text-xs text-muted-foreground">{gymSettings.address}</p>
               </div>
-              <button
-                onClick={markAttendance}
-                disabled={attendanceStatus === "checking"}
-                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-card transition hover:bg-primary/90 disabled:opacity-70"
-              >
-                {attendanceStatus === "checking" ? (
-                  <Clock3 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <MapPin className="h-4 w-4" />
-                )}
-                {attendanceStatus === "checking" ? "Checking location" : "Mark Attendance"}
-              </button>
+              {alreadyMarked ? (
+                <div className="mt-4 rounded-lg border border-success/25 bg-success/10 px-3 py-2.5 text-sm font-medium text-success">
+                  Today attendance has been marked.
+                </div>
+              ) : (
+                <button
+                  onClick={markAttendance}
+                  disabled={attendanceStatus === "checking" || markAttendanceMutation.isPending}
+                  className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-card transition hover:bg-primary/90 disabled:opacity-70"
+                >
+                  {attendanceStatus === "checking" || markAttendanceMutation.isPending ? (
+                    <Clock3 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <MapPin className="h-4 w-4" />
+                  )}
+                  {attendanceStatus === "checking" || markAttendanceMutation.isPending
+                    ? "Checking location"
+                    : "Mark Attendance"}
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -418,18 +437,24 @@ function ClientWorkouts() {
   );
 }
 
-function AttendanceBadge({ status }: { status: "idle" | "checking" | "verified" | "denied" }) {
+function AttendanceBadge({
+  status,
+}: {
+  status: "idle" | "checking" | "verified" | "denied" | "marked";
+}) {
   const styles = {
     idle: "bg-muted text-muted-foreground",
     checking: "bg-info/15 text-info",
     verified: "bg-success/15 text-success",
     denied: "bg-destructive/15 text-destructive",
+    marked: "bg-success/15 text-success",
   };
   const label = {
     idle: "Not marked",
     checking: "Verifying",
     verified: "Verified attendance",
     denied: "Outside radius",
+    marked: "Marked today",
   };
 
   return (
@@ -481,35 +506,46 @@ function AttendanceHistoryCard({ entries }: { entries: AttendanceHistoryEntry[] 
           >
             <div className="min-w-0">
               <p className="text-sm font-medium">
-                {new Date(entry.checkedInAt).toLocaleDateString("en-US", {
+                {new Date(entry.checkedInAt ?? entry.markedAt).toLocaleDateString("en-US", {
                   month: "short",
                   day: "numeric",
                 })}
               </p>
               <p className="text-xs text-muted-foreground">
-                {new Date(entry.checkedInAt).toLocaleTimeString("en-US", {
+                {new Date(entry.checkedInAt ?? entry.markedAt).toLocaleTimeString("en-US", {
                   hour: "numeric",
                   minute: "2-digit",
                 })}{" "}
-                - {formatDistance(entry.distanceMeters)}
+                - Attendance marked
               </p>
             </div>
             <span
               className={cn(
                 "rounded-full px-2.5 py-1 text-xs font-semibold",
-                entry.status === "Verified"
-                  ? "bg-success/15 text-success"
-                  : entry.status === "Denied"
-                    ? "bg-destructive/15 text-destructive"
-                    : "bg-info/15 text-info",
+                "bg-success/15 text-success",
               )}
             >
-              {entry.status}
+              Marked
             </span>
           </li>
         ))}
+        {entries.length === 0 && (
+          <li className="rounded-xl bg-muted/45 p-3 text-sm text-muted-foreground">
+            No attendance marked yet.
+          </li>
+        )}
       </ul>
     </div>
+  );
+}
+
+function isToday(value: string) {
+  const date = new Date(value);
+  const today = new Date();
+  return (
+    date.getFullYear() === today.getFullYear() &&
+    date.getMonth() === today.getMonth() &&
+    date.getDate() === today.getDate()
   );
 }
 

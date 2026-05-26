@@ -1,3 +1,6 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { api } from "@/lib/api";
+
 export interface GymLocationSettings {
   name: string;
   address: string;
@@ -11,10 +14,27 @@ export interface AttendanceHistoryEntry {
   id: string;
   clientId: string;
   clientName: string;
-  status: "Verified" | "Denied" | "Manual";
-  distanceMeters: number;
-  checkedInAt: string;
-  method: "GPS" | "Trainer";
+  trainerId?: string | null;
+  date: string;
+  markedAt: string;
+  checkedInAt?: string;
+  status: "Marked";
+  method?: "GPS" | "Trainer";
+}
+
+export interface AttendanceResource {
+  date: string;
+  client?: unknown;
+  clients: Array<{ id: string; name: string; status?: string; streak?: number; [key: string]: unknown }>;
+  entries: AttendanceHistoryEntry[];
+  todayEntry?: AttendanceHistoryEntry | null;
+}
+
+export interface MarkAttendanceResult {
+  marked: boolean;
+  alreadyMarked: boolean;
+  entry: AttendanceHistoryEntry;
+  client: unknown;
 }
 
 export const defaultGymSettings: GymLocationSettings = {
@@ -26,47 +46,8 @@ export const defaultGymSettings: GymLocationSettings = {
   updatedAt: "2026-05-24T08:00:00.000Z",
 };
 
-export const mockAttendanceHistory: AttendanceHistoryEntry[] = [
-  {
-    id: "att-1001",
-    clientId: "client-1",
-    clientName: "Aarav Mehta",
-    status: "Verified",
-    distanceMeters: 42,
-    checkedInAt: "2026-05-24T06:32:00.000Z",
-    method: "GPS",
-  },
-  {
-    id: "att-1002",
-    clientId: "client-2",
-    clientName: "Priya Nair",
-    status: "Verified",
-    distanceMeters: 76,
-    checkedInAt: "2026-05-24T07:05:00.000Z",
-    method: "GPS",
-  },
-  {
-    id: "att-1003",
-    clientId: "client-3",
-    clientName: "Kabir Shah",
-    status: "Denied",
-    distanceMeters: 438,
-    checkedInAt: "2026-05-23T18:12:00.000Z",
-    method: "GPS",
-  },
-  {
-    id: "att-1004",
-    clientId: "client-4",
-    clientName: "Meera Iyer",
-    status: "Manual",
-    distanceMeters: 0,
-    checkedInAt: "2026-05-23T06:48:00.000Z",
-    method: "Trainer",
-  },
-];
-
 const gymSettingsKey = "fitsphere:gym-location-settings";
-const attendanceHistoryKey = "fitsphere:attendance-history";
+export const attendanceQueryKey = ["api", "/attendance"] as const;
 
 export function calculateDistanceMeters(
   from: Pick<GymLocationSettings, "latitude" | "longitude">,
@@ -108,18 +89,38 @@ export function saveGymSettings(settings: GymLocationSettings) {
   window.localStorage.setItem(gymSettingsKey, JSON.stringify(settings));
 }
 
-export function readAttendanceHistory() {
-  if (typeof window === "undefined") return mockAttendanceHistory;
-
-  try {
-    const stored = window.localStorage.getItem(attendanceHistoryKey);
-    return stored ? (JSON.parse(stored) as AttendanceHistoryEntry[]) : mockAttendanceHistory;
-  } catch {
-    return mockAttendanceHistory;
-  }
+export function useAttendance() {
+  return useQuery({
+    queryKey: attendanceQueryKey,
+    queryFn: ({ signal }) => api<AttendanceResource>("/attendance", { signal }),
+    placeholderData: (previous) => previous,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+  });
 }
 
-export function saveAttendanceHistory(entries: AttendanceHistoryEntry[]) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(attendanceHistoryKey, JSON.stringify(entries));
+export function useMarkAttendance() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input?: { clientId?: string; date?: string }) =>
+      api<MarkAttendanceResult>("/attendance", {
+        method: "POST",
+        body: JSON.stringify(input ?? {}),
+      }),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: attendanceQueryKey }),
+        queryClient.invalidateQueries({ queryKey: ["api", "/clients"] }),
+      ]);
+    },
+  });
+}
+
+export function normalizeAttendanceEntry(entry: AttendanceHistoryEntry): AttendanceHistoryEntry {
+  return {
+    ...entry,
+    checkedInAt: entry.checkedInAt ?? entry.markedAt,
+    status: "Marked",
+    method: entry.method ?? "Trainer",
+  };
 }

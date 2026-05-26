@@ -74,24 +74,33 @@ const clientNav: NavItem[] = [
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const { user, loading, logout } = useAuth();
+  const { user, loading, status, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
-    if (!loading && !user) navigate({ to: "/login" });
+    if (!loading && status === "unauthenticated" && !user) navigate({ to: "/login" });
     if (!loading && user) {
       const roleRoot = `/${user.role}`;
       if (!location.pathname.startsWith(roleRoot)) navigate({ to: roleRoot });
     }
-  }, [user, loading, navigate, location.pathname]);
+  }, [user, loading, status, navigate, location.pathname]);
 
   useEffect(() => {
     setMobileOpen(false);
   }, [location.pathname]);
 
-  if (loading || !user) return null;
+  if (loading) return <AuthStatusScreen title="Restoring session" />;
+  if (status === "offline" && !user) {
+    return (
+      <AuthStatusScreen
+        title="You are offline"
+        description="Reconnect to restore your secure FitSphere session."
+      />
+    );
+  }
+  if (!user) return null;
   if (!location.pathname.startsWith(`/${user.role}`)) return null;
 
   const nav = user.role === "admin" ? adminNav : user.role === "trainer" ? trainerNav : clientNav;
@@ -188,6 +197,26 @@ export function AppShell({ children }: { children: ReactNode }) {
         </header>
 
         <main className="flex-1 px-4 py-6 md:px-8 md:py-8">{children}</main>
+      </div>
+    </div>
+  );
+}
+
+function AuthStatusScreen({
+  title,
+  description = "Checking your secure session...",
+}: {
+  title: string;
+  description?: string;
+}) {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+      <div className="rounded-2xl border border-border bg-card px-6 py-5 text-center shadow-card">
+        <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <Activity className="h-5 w-5" />
+        </div>
+        <p className="font-semibold text-foreground">{title}</p>
+        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
       </div>
     </div>
   );

@@ -2,6 +2,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000/api/
 const LEGACY_TOKEN_KEY = "fitsphere_access_token";
 let accessToken: string | null = null;
 let refreshPromise: Promise<string | null> | null = null;
+let refreshError: unknown = null;
 
 interface ApiEnvelope<T> {
   success: boolean;
@@ -71,8 +72,9 @@ async function request<T>(
   return (payload as ApiEnvelope<T>).data;
 }
 
-export async function refreshAccessToken() {
+export async function refreshAccessToken(options: { throwOnFailure?: boolean } = {}) {
   if (!refreshPromise) {
+    refreshError = null;
     refreshPromise = request<{ user: unknown; accessToken: string }>(
       "/auth/refresh",
       {
@@ -84,7 +86,8 @@ export async function refreshAccessToken() {
         setAccessToken(data.accessToken);
         return data.accessToken;
       })
-      .catch(() => {
+      .catch((error) => {
+        refreshError = error;
         setAccessToken(null);
         return null;
       })
@@ -93,7 +96,9 @@ export async function refreshAccessToken() {
       });
   }
 
-  return refreshPromise;
+  const token = await refreshPromise;
+  if (!token && options.throwOnFailure) throw refreshError ?? new ApiError("Unable to restore session", 401);
+  return token;
 }
 
 export function toCurrency(amount: number) {

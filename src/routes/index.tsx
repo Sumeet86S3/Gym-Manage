@@ -31,17 +31,19 @@ export const Route = createFileRoute("/")({
 });
 
 function Landing() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const navigate = useNavigate();
   useReveal();
 
   useEffect(() => {
-    if (user) {
+    if (!loading && user) {
       const target =
         user.role === "admin" ? "/admin" : user.role === "trainer" ? "/trainer" : "/client";
       navigate({ to: target });
     }
-  }, [user, navigate]);
+  }, [user, loading, navigate]);
+
+  if (loading) return null;
 
   return (
     <div className="min-h-screen bg-background text-foreground antialiased">

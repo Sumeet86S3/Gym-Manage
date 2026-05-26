@@ -7,6 +7,6 @@ import { listAttendanceSchema, markAttendanceSchema } from "./attendance.validat
 
 export const attendanceRoutes = Router();
 
-attendanceRoutes.use(authenticate, authorize("trainer"));
+attendanceRoutes.use(authenticate, authorize("trainer", "client"));
 attendanceRoutes.get("/", validate(listAttendanceSchema), controller.list);
 attendanceRoutes.post("/", validate(markAttendanceSchema), controller.toggle);

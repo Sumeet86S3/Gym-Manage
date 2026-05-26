@@ -19,16 +19,16 @@ import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
-import { useApiResource } from "@/hooks/use-api-resource";
 import type { Client } from "@/lib/live-data";
 import {
   calculateDistanceMeters,
   defaultGymSettings,
   formatDistance,
-  readAttendanceHistory,
   readGymSettings,
-  saveAttendanceHistory,
   saveGymSettings,
+  normalizeAttendanceEntry,
+  useAttendance,
+  useMarkAttendance,
   type AttendanceHistoryEntry,
   type GymLocationSettings,
 } from "@/lib/attendance";
@@ -38,23 +38,22 @@ export const Route = createFileRoute("/trainer/attendance")({
 });
 
 function AttendancePage() {
-  const { data } = useApiResource<{ clients: Client[]; entries: Array<{ clientId: string }> }>(
-    "/attendance",
-    { clients: [], entries: [] },
-  );
+  const attendance = useAttendance();
+  const markAttendanceMutation = useMarkAttendance();
+  const data = (attendance.data ?? { clients: [], entries: [] }) as {
+    clients: Client[];
+    entries: AttendanceHistoryEntry[];
+  };
   const [gymSettings, setGymSettings] = useState<GymLocationSettings>(defaultGymSettings);
-  const [history, setHistory] = useState<AttendanceHistoryEntry[]>([]);
   const [trainerLocation, setTrainerLocation] = useState<{ latitude: number; longitude: number }>();
-  const [marked, setMarked] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     setGymSettings(readGymSettings());
-    setHistory(readAttendanceHistory());
   }, []);
 
-  const todayEntries = history.filter((entry) => isToday(entry.checkedInAt));
-  const verifiedToday = todayEntries.filter((entry) => entry.status === "Verified").length;
-  const deniedToday = todayEntries.filter((entry) => entry.status === "Denied").length;
+  const entries = data.entries.map(normalizeAttendanceEntry);
+  const todayEntries = entries.filter((entry) => isToday(entry.markedAt));
+  const verifiedToday = todayEntries.length;
   const trainerDistance = useMemo(() => {
     if (!trainerLocation) return undefined;
     return calculateDistanceMeters(gymSettings, trainerLocation);
@@ -93,27 +92,22 @@ function AttendancePage() {
   };
 
   const markManualAttendance = (client: Client) => {
-    const isMarked =
-      marked[client.id] ?? data.entries.some((entry) => entry.clientId === client.id);
-    const nextMarked = !isMarked;
-    setMarked((items) => ({ ...items, [client.id]: nextMarked }));
+    const isMarked = data.entries.some((entry) => entry.clientId === client.id);
+    if (isMarked) return;
 
-    if (nextMarked) {
-      const entry: AttendanceHistoryEntry = {
-        id: `att-manual-${Date.now()}-${client.id}`,
-        clientId: client.id,
-        clientName: client.name,
-        status: "Manual",
-        distanceMeters: 0,
-        checkedInAt: new Date().toISOString(),
-        method: "Trainer",
-      };
-      const nextHistory = [entry, ...history].slice(0, 16);
-      setHistory(nextHistory);
-      saveAttendanceHistory(nextHistory);
-    }
-
-    toast.success(nextMarked ? "Manual attendance marked." : "Manual attendance removed.");
+    markAttendanceMutation.mutate(
+      { clientId: client.id },
+      {
+        onSuccess: (result) => {
+          toast.success(
+            result.alreadyMarked ? "Today attendance has been marked." : "Manual attendance marked.",
+          );
+        },
+        onError: (error) => {
+          toast.error(error instanceof Error ? error.message : "Unable to mark attendance.");
+        },
+      },
+    );
   };
 
   return (
@@ -124,8 +118,13 @@ function AttendancePage() {
       />
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Verified today" value={verifiedToday} icon={ShieldCheck} tone="success" />
-        <StatCard label="Denied attempts" value={deniedToday} icon={Radar} tone="warning" />
+        <StatCard label="Marked today" value={verifiedToday} icon={ShieldCheck} tone="success" />
+        <StatCard
+          label="Pending today"
+          value={data.clients.length - verifiedToday}
+          icon={Radar}
+          tone="warning"
+        />
         <StatCard
           label="Allowed radius"
           value={formatDistance(gymSettings.radiusMeters)}
@@ -247,7 +246,7 @@ function AttendancePage() {
           </div>
         </section>
 
-        <AttendanceHistoryPanel entries={history.slice(0, 7)} />
+        <AttendanceHistoryPanel entries={entries.slice(0, 7)} />
       </div>
 
       <section className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-card">
@@ -261,9 +260,8 @@ function AttendancePage() {
 
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           {data.clients.map((client) => {
-            const isMarked =
-              marked[client.id] ?? data.entries.some((entry) => entry.clientId === client.id);
-            const streak = client.streak + (isMarked ? 1 : 0);
+            const isMarked = data.entries.some((entry) => entry.clientId === client.id);
+            const streak = client.streak ?? 0;
             return (
               <div key={client.id} className="rounded-xl border border-border bg-background p-4">
                 <div className="flex items-center justify-between gap-3">
@@ -292,15 +290,17 @@ function AttendancePage() {
                   </span>
                   <button
                     onClick={() => markManualAttendance(client)}
+                    disabled={isMarked || markAttendanceMutation.isPending}
                     className={cn(
                       "inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold shadow-soft transition",
                       isMarked
                         ? "bg-success text-success-foreground hover:bg-success/90"
                         : "bg-primary text-primary-foreground hover:bg-primary/90",
+                      (isMarked || markAttendanceMutation.isPending) && "disabled:opacity-80",
                     )}
                   >
                     <Check className="h-4 w-4" />
-                    {isMarked ? "Marked" : "Mark"}
+                    {isMarked ? "Marked" : markAttendanceMutation.isPending ? "Saving" : "Mark"}
                   </button>
                 </div>
               </div>
@@ -354,7 +354,7 @@ function AttendanceHistoryPanel({ entries }: { entries: AttendanceHistoryEntry[]
       <div className="mb-4 flex items-center justify-between">
         <div>
           <p className="text-sm font-medium text-muted-foreground">Attendance history</p>
-          <h2 className="text-lg font-semibold">Live verification log</h2>
+          <h2 className="text-lg font-semibold">Attendance log</h2>
         </div>
         <Navigation className="h-5 w-5 text-primary" />
       </div>
@@ -366,7 +366,7 @@ function AttendanceHistoryPanel({ entries }: { entries: AttendanceHistoryEntry[]
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold">{entry.clientName}</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  {new Date(entry.checkedInAt).toLocaleString("en-US", {
+                  {new Date(entry.checkedInAt ?? entry.markedAt).toLocaleString("en-US", {
                     month: "short",
                     day: "numeric",
                     hour: "numeric",
@@ -374,28 +374,19 @@ function AttendanceHistoryPanel({ entries }: { entries: AttendanceHistoryEntry[]
                   })}
                 </p>
               </div>
-              <StatusBadge
-                tone={
-                  entry.status === "Verified"
-                    ? "success"
-                    : entry.status === "Denied"
-                      ? "destructive"
-                      : "info"
-                }
-              >
-                {entry.status}
-              </StatusBadge>
+              <StatusBadge tone="success">Marked</StatusBadge>
             </div>
             <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-              <span>{entry.method}</span>
-              <span>
-                {entry.status === "Manual"
-                  ? "Trainer confirmed"
-                  : formatDistance(entry.distanceMeters)}
-              </span>
+              <span>{entry.method ?? "Trainer"}</span>
+              <span>Today attendance has been marked.</span>
             </div>
           </li>
         ))}
+        {entries.length === 0 && (
+          <li className="rounded-xl border border-border bg-background p-3 text-sm text-muted-foreground">
+            No attendance marked today.
+          </li>
+        )}
       </ul>
     </section>
   );
