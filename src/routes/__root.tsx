@@ -7,6 +7,7 @@ import { createQueryClient } from "@/lib/query-client";
 import { ThemeProvider } from "@/lib/theme";
 import { Toaster } from "@/components/ui/sonner";
 import { PwaStatus } from "@/components/pwa-status";
+import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 
 function NotFoundComponent() {
   return (
@@ -108,6 +109,7 @@ function RootComponent() {
       <ThemeProvider>
         <AuthProvider>
           <Outlet />
+          <PwaInstallPrompt />
           <PwaStatus />
           <Toaster richColors position="top-right" />
         </AuthProvider>
