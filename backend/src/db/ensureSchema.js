@@ -2,6 +2,15 @@ import { turso } from "../config/db.js";
 import { logger } from "../config/logger.js";
 
 export async function ensureRuntimeSchema() {
+  const tables = await turso.execute(
+    "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('clients', 'payments')",
+  );
+  const tableNames = new Set(tables.rows.map((row) => row.name));
+  if (!tableNames.has("clients") || !tableNames.has("payments")) {
+    logger.warn("Skipping runtime data normalization because migrations have not created tables yet");
+    return;
+  }
+
   const clientColumns = await turso.execute("PRAGMA table_info(clients)");
   const hasMonthlyFee = clientColumns.rows.some((column) => column.name === "monthly_fee");
 

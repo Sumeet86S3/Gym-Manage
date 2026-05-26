@@ -1,5 +1,6 @@
-import { useCallback, useMemo, type SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, type SetStateAction } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { api } from "@/lib/api";
 
 export function useApiResource<T>(path: string, fallback: T) {
@@ -13,6 +14,11 @@ export function useApiResource<T>(path: string, fallback: T) {
 
   const data = query.data ?? fallback;
   const { refetch } = query;
+  const errorMessage = query.error instanceof Error ? query.error.message : "";
+
+  useEffect(() => {
+    if (errorMessage) toast.error("Unable to load data", { description: errorMessage });
+  }, [errorMessage]);
 
   const reload = useCallback(async () => {
     await refetch();
@@ -32,7 +38,8 @@ export function useApiResource<T>(path: string, fallback: T) {
     data,
     setData,
     loading: query.isLoading,
-    error: query.error instanceof Error ? query.error.message : "",
+    failed: query.isError,
+    error: errorMessage,
     reload,
   };
 }

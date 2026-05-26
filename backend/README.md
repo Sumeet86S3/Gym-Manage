@@ -73,6 +73,11 @@ TURSO_DATABASE_URL=libsql://your-db.turso.io
 TURSO_AUTH_TOKEN=your-token
 JWT_ACCESS_SECRET=replace-with-at-least-32-chars
 JWT_REFRESH_SECRET=replace-with-at-least-32-chars
+JWT_ACCESS_EXPIRES_IN=15m
+JWT_REFRESH_EXPIRES_IN=30d
+IMAGEKIT_PUBLIC_KEY=your-imagekit-public-key
+IMAGEKIT_PRIVATE_KEY=your-imagekit-private-key
+IMAGEKIT_MEAL_FOLDER=/realm-fit/meals
 ```
 
 ## Turso Setup
@@ -90,6 +95,7 @@ Put the URL and token in `.env`.
 ```bash
 npm run db:generate
 npm run db:migrate
+npm run db:migrate:deploy
 ```
 
 For quick development sync:
@@ -104,12 +110,10 @@ npm run db:push
 npm run db:seed
 ```
 
-Demo credentials:
+The seed resets all application data and creates one admin account:
 
 ```text
-admin@fitsphere.com / password123
-trainer@fitsphere.com / password123
-client@fitsphere.com / password123
+gymadmin@local.com / codsum8623
 ```
 
 ## Run
@@ -158,6 +162,8 @@ http://localhost:4000/api/v1
 - `POST /api/v1/payments`
 - `GET /api/v1/goals`
 - `POST /api/v1/goals`
+- `PATCH /api/v1/goals/:id`
+- `DELETE /api/v1/goals/:id`
 - `GET /api/v1/measurements`
 - `POST /api/v1/measurements`
 - `GET /api/v1/notifications`
@@ -170,5 +176,7 @@ http://localhost:4000/api/v1
 - Zod validates body, params, and query before controllers run.
 - `authenticate` loads the current user from JWT.
 - `authorize` enforces role-based access and trainer approval.
+- Tenant-scoped services use centralized authorization helpers for trainer/client ownership.
+- Access tokens are short-lived; refresh tokens rotate through httpOnly cookies and server-side sessions.
 - Errors flow through one global error handler.
 - Responses use one consistent `{ success, message, data }` envelope.

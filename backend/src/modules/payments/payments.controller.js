@@ -7,7 +7,7 @@ export const list = asyncHandler(async (req, res) => {
 });
 
 export const create = asyncHandler(async (req, res) => {
-  created(res, await service.create(req.validated.body), "Payment created");
+  created(res, await service.create(req.user, req.validated.body), "Payment created");
 });
 
 export const markPaid = asyncHandler(async (req, res) => {

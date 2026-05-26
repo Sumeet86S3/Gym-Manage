@@ -3,6 +3,11 @@ import { randomUUID } from "node:crypto";
 import { db } from "../../config/db.js";
 import { clients, exercises, feedback, trainers, workouts } from "../../db/schema.js";
 import { AppError } from "../../utils/AppError.js";
+import {
+  assertExerciseBelongsToWorkout,
+  assertTrainerOwnsClient,
+  assertWorkoutBelongsToClient,
+} from "../../services/authorization.service.js";
 import { clientForUser, trainerForUser } from "../clients/clients.service.js";
 
 async function attachExercises(rows) {
@@ -40,6 +45,8 @@ export async function list(user) {
 
 export async function create(user, input) {
   const trainer = await trainerForUser(user);
+  await assertTrainerOwnsClient(trainer.id, input.clientId);
+
   const now = new Date().toISOString();
   const workoutId = randomUUID();
   const [workout] = await db
@@ -80,9 +87,7 @@ export async function getClientWorkout(user) {
     .from(workouts)
     .where(and(eq(workouts.clientId, client.id), isNull(workouts.deletedAt)));
   const hydrated = await attachExercises(
-    rows.length
-      ? rows
-      : await db.select().from(workouts).where(isNull(workouts.deletedAt)).limit(1),
+    rows,
   );
   if (!hydrated.length) throw new AppError("Workout not found", 404);
   return hydrated[0];
@@ -90,8 +95,8 @@ export async function getClientWorkout(user) {
 
 export async function submitFeedback(user, exerciseId, input) {
   const client = await clientForUser(user);
-  const [exercise] = await db.select().from(exercises).where(eq(exercises.id, exerciseId)).limit(1);
-  if (!exercise) throw new AppError("Exercise not found", 404);
+  await assertWorkoutBelongsToClient(input.workoutId, client.id);
+  await assertExerciseBelongsToWorkout(exerciseId, input.workoutId);
 
   const now = new Date().toISOString();
   const [entry] = await db
@@ -147,6 +152,11 @@ export async function listFeedback(user, filter = "All") {
       .where(eq(clients.trainerId, trainer.id));
     const allowed = new Set(trainerClients.map((client) => client.id));
     rows = rows.filter((row) => allowed.has(row.clientId));
+  }
+
+  if (user.role === "client") {
+    const client = await clientForUser(user);
+    rows = rows.filter((row) => row.clientId === client.id);
   }
 
   return rows.filter((row) => {

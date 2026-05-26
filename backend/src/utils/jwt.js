@@ -14,10 +14,19 @@ export function signAccessToken(user) {
   );
 }
 
-export function signRefreshToken(user) {
-  return jwt.sign({ sub: user.id, tokenVersion: user.tokenVersion }, env.JWT_REFRESH_SECRET, {
-    expiresIn: env.JWT_REFRESH_EXPIRES_IN,
-  });
+export function signRefreshToken(user, session) {
+  return jwt.sign(
+    {
+      sub: user.id,
+      sid: session.sessionId,
+      jti: session.tokenId,
+      tokenVersion: user.tokenVersion,
+    },
+    env.JWT_REFRESH_SECRET,
+    {
+      expiresIn: env.JWT_REFRESH_EXPIRES_IN,
+    },
+  );
 }
 
 export function verifyAccessToken(token) {
@@ -34,7 +43,7 @@ export function setRefreshCookie(res, token) {
     secure: env.COOKIE_SECURE,
     sameSite: env.isProduction ? "none" : "lax",
     path: "/api/v1/auth",
-    maxAge: 7 * 24 * 60 * 60 * 1000,
+    maxAge: env.REFRESH_COOKIE_MAX_AGE_MS,
   });
 }
 

@@ -17,3 +17,14 @@ export const createGoalSchema = z.object({
     reverse: z.boolean().default(false),
   }),
 });
+
+export const updateGoalSchema = z.object({
+  params: z.object({ id: z.string().min(1) }),
+  body: createGoalSchema.shape.body.partial().refine((value) => Object.keys(value).length > 0, {
+    message: "At least one field is required",
+  }),
+});
+
+export const goalIdSchema = z.object({
+  params: z.object({ id: z.string().min(1) }),
+});

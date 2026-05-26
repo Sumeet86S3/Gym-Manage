@@ -272,9 +272,29 @@ export const notifications = sqliteTable(
   }),
 );
 
+export const refreshSessions = sqliteTable(
+  "refresh_sessions",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tokenId: text("token_id").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: text("expires_at").notNull(),
+    revokedAt: text("revoked_at"),
+    ...timestamps,
+  },
+  (table) => ({
+    userIdx: index("refresh_sessions_user_id_idx").on(table.userId),
+    tokenIdx: uniqueIndex("refresh_sessions_token_id_idx").on(table.tokenId),
+  }),
+);
+
 export const usersRelations = relations(users, ({ one, many }) => ({
   trainer: one(trainers, { fields: [users.id], references: [trainers.userId] }),
   notifications: many(notifications),
+  refreshSessions: many(refreshSessions),
 }));
 
 export const trainersRelations = relations(trainers, ({ one, many }) => ({

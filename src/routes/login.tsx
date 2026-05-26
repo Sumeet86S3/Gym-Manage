@@ -12,10 +12,10 @@ export const Route = createFileRoute("/login")({
   component: LoginPage,
 });
 
-const roles: { id: UserRole; label: string; icon: typeof ShieldCheck; demoEmail: string }[] = [
-  { id: "admin", label: "Admin", icon: ShieldCheck, demoEmail: "admin@fitsphere.com" },
-  { id: "trainer", label: "Trainer", icon: UserCheck, demoEmail: "trainer@fitsphere.com" },
-  { id: "client", label: "Member", icon: Dumbbell, demoEmail: "client@fitsphere.com" },
+const roles: { id: UserRole; label: string; icon: typeof ShieldCheck; placeholder: string }[] = [
+  { id: "admin", label: "Admin", icon: ShieldCheck, placeholder: "admin@example.com" },
+  { id: "trainer", label: "Trainer", icon: UserCheck, placeholder: "trainer@example.com" },
+  { id: "client", label: "Member", icon: Dumbbell, placeholder: "member@example.com" },
 ];
 
 function LoginPage() {
@@ -32,11 +32,7 @@ function LoginPage() {
     setError("");
     setSubmitting(true);
     try {
-      const user = await login(
-        email || roles.find((r) => r.id === role)!.demoEmail,
-        password || "password123",
-        role,
-      );
+      const user = await login(email, password, role);
       if (user.role === "trainer" && !user.approved) {
         navigate({ to: "/signup" });
         return;
@@ -110,7 +106,8 @@ function LoginPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder={roles.find((r) => r.id === role)!.demoEmail}
+                  placeholder={roles.find((r) => r.id === role)!.placeholder}
+                  required
                   className="mt-1.5 w-full rounded-xl border border-input bg-background/60 px-3.5 py-2.5 text-sm shadow-soft outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30"
                 />
               </Field>
@@ -130,6 +127,7 @@ function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   autoComplete="current-password"
+                  required
                   className="mt-1.5"
                   inputClassName="w-full rounded-xl border border-input bg-background/60 px-3.5 py-2.5 text-sm shadow-soft outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30"
                 />
@@ -156,9 +154,6 @@ function LoginPage() {
               <Link to="/signup" className="font-medium text-primary hover:underline">
                 Apply for an account
               </Link>
-            </p>
-            <p className="mt-3 text-center text-[11px] text-muted-foreground">
-              Demo accounts use password: password123.
             </p>
           </div>
         </div>

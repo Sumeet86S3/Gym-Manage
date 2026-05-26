@@ -1,8 +1,8 @@
 import bcrypt from "bcrypt";
 import { eq } from "drizzle-orm";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { db } from "../../config/db.js";
-import { clients, trainers, users } from "../../db/schema.js";
+import { clients, refreshSessions, trainers, users } from "../../db/schema.js";
 import { AppError } from "../../utils/AppError.js";
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../../utils/jwt.js";
 
@@ -13,11 +13,22 @@ function sanitizeUser(user) {
   return safe;
 }
 
-function tokenPayload(user) {
+async function tokenPayload(user, sessionId = randomUUID()) {
+  const session = {
+    sessionId,
+    tokenId: randomUUID(),
+  };
+  const refreshToken = signRefreshToken(user, session);
+  await upsertRefreshSession(user.id, {
+    id: sessionId,
+    tokenId: session.tokenId,
+    tokenHash: hashToken(refreshToken),
+  });
+
   return {
     user: sanitizeUser(user),
     accessToken: signAccessToken(user),
-    refreshToken: signRefreshToken(user),
+    refreshToken,
   };
 }
 
@@ -78,7 +89,8 @@ export async function signupTrainer({ name, email, password, specialization }) {
     })
     .returning();
 
-  return { ...tokenPayload(user), trainer };
+  const tokens = await tokenPayload(user);
+  return { ...tokens, trainer };
 }
 
 export async function refresh(refreshToken) {
@@ -91,21 +103,48 @@ export async function refresh(refreshToken) {
     throw new AppError("Invalid refresh token", 401);
   }
 
+  if (!payload.sid || !payload.jti) throw new AppError("Invalid refresh token", 401);
+
+  const [session] = await db
+    .select()
+    .from(refreshSessions)
+    .where(eq(refreshSessions.id, payload.sid))
+    .limit(1);
+  if (
+    !session ||
+    session.userId !== payload.sub ||
+    session.tokenId !== payload.jti ||
+    session.revokedAt ||
+    session.expiresAt <= new Date().toISOString()
+  ) {
+    throw new AppError("Invalid refresh token", 401);
+  }
+
+  if (session.tokenHash !== hashToken(refreshToken)) {
+    await revokeRefreshTokens(payload.sub);
+    throw new AppError("Invalid refresh token", 401);
+  }
+
   const [user] = await db.select().from(users).where(eq(users.id, payload.sub)).limit(1);
   if (!user || user.deletedAt || user.tokenVersion !== payload.tokenVersion) {
     throw new AppError("Invalid refresh token", 401);
   }
 
-  return tokenPayload(user);
+  return tokenPayload(user, session.id);
 }
 
 export async function revokeRefreshTokens(userId) {
   const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   if (!user) return;
+  const now = new Date().toISOString();
   await db
     .update(users)
-    .set({ tokenVersion: user.tokenVersion + 1, updatedAt: new Date().toISOString() })
+    .set({ tokenVersion: user.tokenVersion + 1, updatedAt: now })
     .where(eq(users.id, userId));
+  await db
+    .update(refreshSessions)
+    .set({ revokedAt: now, updatedAt: now })
+    .where(eq(refreshSessions.userId, userId));
 }
 
 export async function me(user) {
@@ -119,4 +158,41 @@ export async function me(user) {
     return { ...safe, client };
   }
   return safe;
+}
+
+async function upsertRefreshSession(userId, session) {
+  const now = new Date().toISOString();
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  const [existing] = await db
+    .select({ id: refreshSessions.id })
+    .from(refreshSessions)
+    .where(eq(refreshSessions.id, session.id))
+    .limit(1);
+
+  if (existing) {
+    await db
+      .update(refreshSessions)
+      .set({
+        tokenId: session.tokenId,
+        tokenHash: session.tokenHash,
+        expiresAt,
+        updatedAt: now,
+      })
+      .where(eq(refreshSessions.id, session.id));
+    return;
+  }
+
+  await db.insert(refreshSessions).values({
+    id: session.id,
+    userId,
+    tokenId: session.tokenId,
+    tokenHash: session.tokenHash,
+    expiresAt,
+    createdAt: now,
+    updatedAt: now,
+  });
+}
+
+function hashToken(token) {
+  return createHash("sha256").update(token).digest("hex");
 }

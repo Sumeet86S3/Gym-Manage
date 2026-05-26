@@ -1,5 +1,7 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000/api/v1";
-const TOKEN_KEY = "fitsphere_access_token";
+const LEGACY_TOKEN_KEY = "fitsphere_access_token";
+let accessToken: string | null = null;
+let refreshPromise: Promise<string | null> | null = null;
 
 interface ApiEnvelope<T> {
   success: boolean;
@@ -20,17 +22,19 @@ export class ApiError extends Error {
 }
 
 export function getAccessToken() {
-  if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(TOKEN_KEY);
+  return accessToken;
 }
 
 export function setAccessToken(token: string | null) {
-  if (typeof window === "undefined") return;
-  if (token) window.localStorage.setItem(TOKEN_KEY, token);
-  else window.localStorage.removeItem(TOKEN_KEY);
+  accessToken = token;
+  if (typeof window !== "undefined") window.localStorage.removeItem(LEGACY_TOKEN_KEY);
 }
 
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
+  return request<T>(path, options, true);
+}
+
+async function request<T>(path: string, options: RequestInit = {}, allowRefresh: boolean): Promise<T> {
   const token = getAccessToken();
   const headers = new Headers(options.headers);
   if (!headers.has("Content-Type") && options.body) headers.set("Content-Type", "application/json");
@@ -45,11 +49,37 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   if (response.status === 204) return null as T;
 
   const payload = await response.json().catch(() => null);
+  if (response.status === 401 && allowRefresh && path !== "/auth/refresh") {
+    const refreshedToken = await refreshAccessToken();
+    if (refreshedToken) return request<T>(path, options, false);
+  }
+
   if (!response.ok) {
     throw new ApiError(payload?.message ?? "Request failed", response.status, payload?.details);
   }
 
   return (payload as ApiEnvelope<T>).data;
+}
+
+export async function refreshAccessToken() {
+  if (!refreshPromise) {
+    refreshPromise = request<{ user: unknown; accessToken: string }>("/auth/refresh", {
+      method: "POST",
+    }, false)
+      .then((data) => {
+        setAccessToken(data.accessToken);
+        return data.accessToken;
+      })
+      .catch(() => {
+        setAccessToken(null);
+        return null;
+      })
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+
+  return refreshPromise;
 }
 
 export function toCurrency(amount: number) {

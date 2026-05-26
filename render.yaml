@@ -15,6 +15,8 @@ services:
       - key: COOKIE_SECURE
         value: "true"
       - key: JWT_ACCESS_EXPIRES_IN
+        value: 15m
+      - key: JWT_REFRESH_EXPIRES_IN
         value: 30d
       - key: CORS_ORIGIN
         sync: false

@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { db } from "../../config/db.js";
 import { clients, payments } from "../../db/schema.js";
 import { AppError } from "../../utils/AppError.js";
+import { assertTrainerOwnsClient } from "../../services/authorization.service.js";
 import { clientForUser, trainerForUser } from "../clients/clients.service.js";
 import {
   dateOnly,
@@ -16,7 +17,11 @@ export async function list(user, query = {}) {
   await refreshBillingStatuses();
   const where = [];
   if (user.role === "client") where.push(eq(payments.clientId, (await clientForUser(user)).id));
-  if (user.role === "trainer") where.push(eq(clients.trainerId, (await trainerForUser(user)).id));
+  if (user.role === "trainer") {
+    const trainer = await trainerForUser(user);
+    if (query.clientId) await assertTrainerOwnsClient(trainer.id, query.clientId);
+    where.push(eq(clients.trainerId, trainer.id));
+  }
   if (query.clientId) where.push(eq(payments.clientId, query.clientId));
   if (query.status) where.push(eq(payments.status, query.status));
   const queryBuilder = db
@@ -42,7 +47,12 @@ export async function list(user, query = {}) {
     : queryBuilder.orderBy(desc(payments.createdAt));
 }
 
-export async function create(input) {
+export async function create(user, input) {
+  if (user.role === "trainer") {
+    const trainer = await trainerForUser(user);
+    await assertTrainerOwnsClient(trainer.id, input.clientId);
+  }
+
   const now = new Date().toISOString();
   const status = normalizePaymentStatus(input.status);
   const [payment] = await db
@@ -76,7 +86,7 @@ export async function markPaid(user, id) {
   if (!row) throw new AppError("Payment not found", 404);
   if (user.role === "trainer") {
     const trainer = await trainerForUser(user);
-    if (row.client.trainerId !== trainer.id) throw new AppError("Payment not found", 404);
+    await assertTrainerOwnsClient(trainer.id, row.client.id);
   }
 
   const now = new Date();

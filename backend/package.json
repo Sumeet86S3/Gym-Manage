@@ -5,11 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch src/server.js",
-    "start": "node src/server.js",
+    "start": "npm run db:migrate:deploy && node src/server.js",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "db:migrate:deploy": "node scripts/migrate.js",
     "db:push": "drizzle-kit push",
-    "db:seed": "node scripts/seed.js"
+    "db:seed": "node scripts/seed.js",
+    "test": "node --test"
   },
   "dependencies": {
     "@libsql/client": "^0.15.15",

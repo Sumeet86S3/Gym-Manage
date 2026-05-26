@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { UserRole } from "./types";
-import { api, setAccessToken } from "./api";
+import { api, refreshAccessToken, setAccessToken } from "./api";
 
 interface AuthUser {
   id: string;
@@ -28,22 +28,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api<AuthUser>("/auth/me")
-      .then((data) => setUser(normalizeUser(data)))
-      .catch(async () => {
-        try {
-          const data = await api<{ user: AuthUser; accessToken: string }>("/auth/refresh", {
-            method: "POST",
-          });
-          setAccessToken(data.accessToken);
-          setUser(normalizeUser(data.user));
-        } catch {
-          setAccessToken(null);
-          setUser(null);
-        }
-      })
-      .finally(() => setLoading(false));
+    restoreSession();
   }, []);
+
+  const restoreSession = async () => {
+    setLoading(true);
+    try {
+      const token = await refreshAccessToken();
+      if (!token) {
+        setUser(null);
+        return;
+      }
+      const data = await api<AuthUser>("/auth/me");
+      setUser(normalizeUser(data));
+    } catch {
+      setAccessToken(null);
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const login = async (email: string, password: string, role: UserRole) => {
     const data = await api<{ user: AuthUser; accessToken: string }>("/auth/login", {

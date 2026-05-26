@@ -11,7 +11,7 @@ const exerciseSchema = z.object({
 
 export const createWorkoutSchema = z.object({
   body: z.object({
-    clientId: z.string().optional(),
+    clientId: z.string().min(1),
     name: z.string().min(2).max(120),
     type: z.string().min(2).max(80),
     durationMinutes: z.number().int().positive().optional(),

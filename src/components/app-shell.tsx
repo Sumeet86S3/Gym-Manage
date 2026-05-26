@@ -81,13 +81,18 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
-  }, [user, loading, navigate]);
+    if (!loading && user) {
+      const roleRoot = `/${user.role}`;
+      if (!location.pathname.startsWith(roleRoot)) navigate({ to: roleRoot });
+    }
+  }, [user, loading, navigate, location.pathname]);
 
   useEffect(() => {
     setMobileOpen(false);
   }, [location.pathname]);
 
   if (loading || !user) return null;
+  if (!location.pathname.startsWith(`/${user.role}`)) return null;
 
   const nav = user.role === "admin" ? adminNav : user.role === "trainer" ? trainerNav : clientNav;
 
