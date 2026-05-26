@@ -45,7 +45,8 @@ export function getRefreshToken() {
   if (refreshToken) return refreshToken;
   
   if (typeof window !== "undefined") {
-    const storedToken = window.sessionStorage.getItem(REFRESH_TOKEN_KEY);
+    // Check localStorage first (persists across app closures for PWA)
+    const storedToken = window.localStorage.getItem(REFRESH_TOKEN_KEY);
     if (storedToken) {
       refreshToken = storedToken;
       return storedToken;
@@ -73,9 +74,11 @@ export function setRefreshToken(token: string | null) {
   refreshToken = token;
   if (typeof window !== "undefined") {
     if (token) {
-      window.sessionStorage.setItem(REFRESH_TOKEN_KEY, token);
+      // Store in localStorage so it persists across app closures (PWA support)
+      window.localStorage.setItem(REFRESH_TOKEN_KEY, token);
     } else {
-      window.sessionStorage.removeItem(REFRESH_TOKEN_KEY);
+      // Clear localStorage when logging out
+      window.localStorage.removeItem(REFRESH_TOKEN_KEY);
     }
   }
 }
