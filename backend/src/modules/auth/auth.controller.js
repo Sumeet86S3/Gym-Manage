@@ -6,7 +6,7 @@ import * as authService from "./auth.service.js";
 export const login = asyncHandler(async (req, res) => {
   const result = await authService.login(req.validated.body);
   setRefreshCookie(res, result.refreshToken);
-  success(res, { user: result.user, accessToken: result.accessToken }, "Logged in");
+  success(res, { user: result.user, accessToken: result.accessToken, refreshToken: result.refreshToken }, "Logged in");
 });
 
 export const signupTrainer = asyncHandler(async (req, res) => {
@@ -14,15 +14,17 @@ export const signupTrainer = asyncHandler(async (req, res) => {
   setRefreshCookie(res, result.refreshToken);
   created(
     res,
-    { user: result.user, trainer: result.trainer, accessToken: result.accessToken },
+    { user: result.user, trainer: result.trainer, accessToken: result.accessToken, refreshToken: result.refreshToken },
     "Trainer application submitted",
   );
 });
 
 export const refresh = asyncHandler(async (req, res) => {
-  const result = await authService.refresh(req.cookies.refreshToken);
+  // Try to get refresh token from cookie first (same-domain), then from body (cross-domain)
+  const refreshToken = req.cookies.refreshToken || req.body?.refreshToken;
+  const result = await authService.refresh(refreshToken);
   setRefreshCookie(res, result.refreshToken);
-  success(res, { user: result.user, accessToken: result.accessToken }, "Token refreshed");
+  success(res, { user: result.user, accessToken: result.accessToken, refreshToken: result.refreshToken }, "Token refreshed");
 });
 
 export const logout = asyncHandler(async (req, res) => {

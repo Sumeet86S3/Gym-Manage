@@ -1,7 +1,9 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000/api/v1";
 const LEGACY_TOKEN_KEY = "fitsphere_access_token";
 const SESSION_TOKEN_KEY = "fitsphere_session_token";
+const REFRESH_TOKEN_KEY = "fitsphere_refresh_token";
 let accessToken: string | null = null;
+let refreshToken: string | null = null;
 let refreshPromise: Promise<string | null> | null = null;
 let refreshError: unknown = null;
 
@@ -39,6 +41,20 @@ export function getAccessToken() {
   return null;
 }
 
+export function getRefreshToken() {
+  if (refreshToken) return refreshToken;
+  
+  if (typeof window !== "undefined") {
+    const storedToken = window.sessionStorage.getItem(REFRESH_TOKEN_KEY);
+    if (storedToken) {
+      refreshToken = storedToken;
+      return storedToken;
+    }
+  }
+  
+  return null;
+}
+
 export function setAccessToken(token: string | null) {
   accessToken = token;
   if (typeof window !== "undefined") {
@@ -49,6 +65,17 @@ export function setAccessToken(token: string | null) {
     } else {
       // Clear sessionStorage when logging out
       window.sessionStorage.removeItem(SESSION_TOKEN_KEY);
+    }
+  }
+}
+
+export function setRefreshToken(token: string | null) {
+  refreshToken = token;
+  if (typeof window !== "undefined") {
+    if (token) {
+      window.sessionStorage.setItem(REFRESH_TOKEN_KEY, token);
+    } else {
+      window.sessionStorage.removeItem(REFRESH_TOKEN_KEY);
     }
   }
 }
@@ -97,20 +124,26 @@ async function request<T>(
 export async function refreshAccessToken(options: { throwOnFailure?: boolean } = {}) {
   if (!refreshPromise) {
     refreshError = null;
-    refreshPromise = request<{ user: unknown; accessToken: string }>(
+    refreshPromise = request<{ user: unknown; accessToken: string; refreshToken?: string }>(
       "/auth/refresh",
       {
         method: "POST",
+        body: JSON.stringify({ refreshToken: getRefreshToken() }),
       },
       false,
     )
       .then((data) => {
         setAccessToken(data.accessToken);
+        // Update refresh token if backend sends a new one (for token rotation)
+        if (data.refreshToken) {
+          setRefreshToken(data.refreshToken);
+        }
         return data.accessToken;
       })
       .catch((error) => {
         refreshError = error;
         setAccessToken(null);
+        setRefreshToken(null);
         return null;
       })
       .finally(() => {

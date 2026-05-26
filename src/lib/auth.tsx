@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { UserRole } from "./types";
-import { ApiError, api, refreshAccessToken, setAccessToken } from "./api";
+import { ApiError, api, refreshAccessToken, setAccessToken, setRefreshToken } from "./api";
 
 interface AuthUser {
   id: string;
@@ -57,11 +57,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const login = async (email: string, password: string, role: UserRole) => {
-    const data = await api<{ user: AuthUser; accessToken: string }>("/auth/login", {
+    const data = await api<{ user: AuthUser; accessToken: string; refreshToken?: string }>("/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password, role }),
     });
     setAccessToken(data.accessToken);
+    if (data.refreshToken) setRefreshToken(data.refreshToken);
     const nextUser = normalizeUser(data.user);
     setUser(nextUser);
     setStatus("authenticated");
@@ -69,11 +70,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signupTrainer = async (name: string, email: string, password: string) => {
-    const data = await api<{ user: AuthUser; accessToken: string }>("/auth/trainer-signup", {
+    const data = await api<{ user: AuthUser; trainer: unknown; accessToken: string; refreshToken?: string }>("/auth/trainer-signup", {
       method: "POST",
       body: JSON.stringify({ name, email, password }),
     });
     setAccessToken(data.accessToken);
+    if (data.refreshToken) setRefreshToken(data.refreshToken);
     const nextUser = normalizeUser(data.user);
     setUser(nextUser);
     setStatus("authenticated");
@@ -92,7 +94,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
-    api("/auth/logout", { method: "POST" }).catch(() => undefined);
+    apiRefreshToken(null);
+    set("/auth/logout", { method: "POST" }).catch(() => undefined);
     setAccessToken(null);
     setUser(null);
     setStatus("unauthenticated");
