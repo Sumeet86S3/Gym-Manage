@@ -34,22 +34,36 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   return request<T>(path, options, true);
 }
 
-async function request<T>(path: string, options: RequestInit = {}, allowRefresh: boolean): Promise<T> {
+async function request<T>(
+  path: string,
+  options: RequestInit = {},
+  allowRefresh: boolean,
+): Promise<T> {
   const token = getAccessToken();
   const headers = new Headers(options.headers);
   if (!headers.has("Content-Type") && options.body) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers,
-    credentials: "include",
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      headers,
+      credentials: "include",
+      cache: "no-store",
+    });
+  } catch (error) {
+    if (isOffline()) {
+      throw new ApiError("You appear to be offline. Reconnect to load live FitSphere data.", 0);
+    }
+
+    throw error;
+  }
 
   if (response.status === 204) return null as T;
 
   const payload = await response.json().catch(() => null);
-  if (response.status === 401 && allowRefresh && path !== "/auth/refresh") {
+  if (response.status === 401 && allowRefresh && path !== "/auth/refresh" && !isOffline()) {
     const refreshedToken = await refreshAccessToken();
     if (refreshedToken) return request<T>(path, options, false);
   }
@@ -62,10 +76,16 @@ async function request<T>(path: string, options: RequestInit = {}, allowRefresh:
 }
 
 export async function refreshAccessToken() {
+  if (isOffline()) return null;
+
   if (!refreshPromise) {
-    refreshPromise = request<{ user: unknown; accessToken: string }>("/auth/refresh", {
-      method: "POST",
-    }, false)
+    refreshPromise = request<{ user: unknown; accessToken: string }>(
+      "/auth/refresh",
+      {
+        method: "POST",
+      },
+      false,
+    )
       .then((data) => {
         setAccessToken(data.accessToken);
         return data.accessToken;
@@ -91,4 +111,8 @@ export function formatDateLabel(value?: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function isOffline() {
+  return typeof navigator !== "undefined" && !navigator.onLine;
 }

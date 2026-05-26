@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { UserRole } from "./types";
 import { api, refreshAccessToken, setAccessToken } from "./api";
 
@@ -24,6 +25,7 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -85,6 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     api("/auth/logout", { method: "POST" }).catch(() => undefined);
     setAccessToken(null);
     setUser(null);
+    queryClient.clear();
   };
 
   return (
