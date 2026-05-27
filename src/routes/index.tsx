@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useReveal } from "@/hooks/use-reveal";
 import { ThemeToggle } from "@/lib/theme";
+import { FullScreenLoader } from "@/components/full-screen-loader";
 import {
   Activity,
   ArrowRight,
@@ -43,19 +44,7 @@ function Landing() {
     }
   }, [user, loading, navigate]);
 
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-4">
-        <div className="rounded-2xl border border-border bg-card px-6 py-5 text-center shadow-card">
-          <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <Activity className="h-5 w-5" />
-          </div>
-          <p className="font-semibold">Restoring session...</p>
-          <p className="mt-1 text-sm text-muted-foreground">Checking your secure FitSphere session.</p>
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <FullScreenLoader />;
 
   return (
     <div className="min-h-screen bg-background text-foreground antialiased">

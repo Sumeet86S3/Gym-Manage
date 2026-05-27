@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { FullScreenLoader } from "@/components/full-screen-loader";
 
 interface NavItem {
   label: string;
@@ -91,7 +92,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     setMobileOpen(false);
   }, [location.pathname]);
 
-  if (loading) return <AuthStatusScreen title="Restoring session" />;
+  if (loading) return <FullScreenLoader />;
   if (status === "offline" && !user) {
     return (
       <AuthStatusScreen

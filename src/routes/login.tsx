@@ -7,6 +7,7 @@ import type { UserRole } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import authBg from "@/assets/auth-bg.jpg";
 import { PasswordInput } from "@/components/password-input";
+import { FullScreenLoader } from "@/components/full-screen-loader";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
@@ -36,19 +37,7 @@ function LoginPage() {
     }
   }, [user, loading, navigate]);
 
-  if (loading) {
-    return (
-      <AuthPageFrame>
-        <div className="w-full max-w-sm rounded-3xl glass-strong p-8 text-center shadow-elevated">
-          <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <Activity className="h-5 w-5" />
-          </div>
-          <p className="font-semibold">Restoring session...</p>
-          <p className="mt-1 text-sm text-muted-foreground">Checking your secure FitSphere session.</p>
-        </div>
-      </AuthPageFrame>
-    );
-  }
+  if (loading) return <FullScreenLoader />;
   if (!user && typeof navigator !== "undefined" && !navigator.onLine) {
     return (
       <AuthPageFrame>

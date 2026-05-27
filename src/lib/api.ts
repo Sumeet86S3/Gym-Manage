@@ -3,6 +3,7 @@ import { trackEvent } from "./telemetry";
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000/api/v1";
 const LEGACY_TOKEN_KEY = "fitsphere_access_token";
 const REFRESH_TOKEN_KEY = "fitsphere_refresh_token";
+const REQUEST_TIMEOUT_MS = 15_000;
 let accessToken: string | null = null;
 let refreshPromise: Promise<string | null> | null = null;
 let refreshError: unknown = null;
@@ -57,16 +58,27 @@ async function request<T>(
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
   let response: Response;
+  const timeoutController = new AbortController();
+  const timeoutId = window.setTimeout(() => timeoutController.abort(), REQUEST_TIMEOUT_MS);
+  const signal = mergeSignals(options.signal, timeoutController.signal);
+
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
       ...options,
       headers,
       credentials: "include",
       cache: "no-store",
+      signal,
     });
   } catch (error) {
+    if (timeoutController.signal.aborted) {
+      trackEvent({ level: "warn", area: "api", message: "Network request timed out", path });
+      throw new ApiError("FitSphere took too long to respond. Please try again.", 408);
+    }
     trackEvent({ level: "warn", area: "api", message: "Network request failed", path, error });
     throw new ApiError("Unable to reach FitSphere. Reconnect to load live data.", 0);
+  } finally {
+    window.clearTimeout(timeoutId);
   }
 
   if (response.status === 204) return null as T;
@@ -131,4 +143,23 @@ export function formatDateLabel(value?: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function mergeSignals(...signals: Array<AbortSignal | null | undefined>) {
+  const activeSignals = signals.filter(Boolean) as AbortSignal[];
+  if (activeSignals.length === 0) return undefined;
+  if (activeSignals.length === 1) return activeSignals[0];
+
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+
+  for (const signal of activeSignals) {
+    if (signal.aborted) {
+      controller.abort();
+      break;
+    }
+    signal.addEventListener("abort", abort, { once: true });
+  }
+
+  return controller.signal;
 }
