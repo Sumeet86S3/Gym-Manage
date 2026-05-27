@@ -1,4 +1,4 @@
-import { and, eq, gte, isNull, like } from "drizzle-orm";
+import { and, desc, eq, gte, isNull } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { db } from "../../config/db.js";
 import { clients, mealLogs } from "../../db/schema.js";
@@ -28,7 +28,8 @@ export async function list(user, query = {}) {
     })
     .from(mealLogs)
     .innerJoin(clients, eq(mealLogs.clientId, clients.id))
-    .where(and(...where));
+    .where(and(...where))
+    .orderBy(desc(mealLogs.loggedAt));
 
   if (user.role === "client") {
     const client = await clientForUser(user);

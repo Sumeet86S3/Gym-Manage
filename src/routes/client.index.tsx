@@ -1,6 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
+  ArrowRight,
   CheckCircle2,
   Clock3,
   Dumbbell,
@@ -9,9 +10,11 @@ import {
   MapPin,
   Navigation,
   ShieldCheck,
+  UtensilsCrossed,
   XCircle,
 } from "lucide-react";
 import { PageHeader } from "@/components/app-shell";
+import { MealTypeBadge } from "@/components/meal/meal-type-badge";
 import {
   Dialog,
   DialogContent,
@@ -25,6 +28,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useApiResource } from "@/hooks/use-api-resource";
 import type { Workout } from "@/lib/live-data";
+import type { MealEntry } from "@/lib/types";
 import {
   calculateDistanceMeters,
   defaultGymSettings,
@@ -78,6 +82,9 @@ function ClientWorkouts() {
   >("idle");
   const attendance = useAttendance();
   const markAttendanceMutation = useMarkAttendance();
+  const { data: loadedMeals } = useApiResource<
+    Array<MealEntry & { imageUrl?: string; loggedAt?: string }>
+  >("/meals?range=week", []);
 
   useEffect(() => {
     setGymSettings(readGymSettings());
@@ -133,6 +140,10 @@ function ClientWorkouts() {
     : attendanceEntries.find((entry) => isToday(entry.markedAt));
   const alreadyMarked = Boolean(todayEntry);
   const clientHistory = attendanceEntries.slice(0, 4);
+  const recentMeals = useMemo(
+    () => loadedMeals.map(normalizeMealEntry).sort((a, b) => b.timestamp - a.timestamp).slice(0, 3),
+    [loadedMeals],
+  );
 
   const markAttendance = async () => {
     if (alreadyMarked) return;
@@ -360,6 +371,8 @@ function ClientWorkouts() {
         </div>
       </div>
 
+      <RecentMealsPanel meals={recentMeals} />
+
       <ul className="space-y-3">
         {workout.exercises.map((e) => {
           const done = completed[e.id];
@@ -490,6 +503,78 @@ function ClientWorkouts() {
       </Dialog>
     </div>
   );
+}
+
+function RecentMealsPanel({ meals }: { meals: MealEntry[] }) {
+  return (
+    <section className="mb-6 rounded-2xl border border-border bg-card p-5 shadow-card">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-muted-foreground">Meal uploads</p>
+          <h3 className="text-lg font-semibold">Recent meals</h3>
+        </div>
+        <Link
+          to="/client/meals"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold text-foreground transition hover:bg-muted"
+        >
+          View all <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
+      </div>
+
+      {meals.length === 0 ? (
+        <div className="flex items-center gap-3 rounded-xl border border-dashed border-border bg-muted/30 p-4">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <UtensilsCrossed className="h-5 w-5" />
+          </span>
+          <div>
+            <p className="text-sm font-semibold">No meals uploaded yet</p>
+            <p className="text-xs text-muted-foreground">Your recent meal photos will appear here.</p>
+          </div>
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-3">
+          {meals.map((meal) => (
+            <article
+              key={meal.id}
+              className="overflow-hidden rounded-xl border border-border bg-background"
+            >
+              <div className="relative aspect-[4/3] bg-muted">
+                {meal.image ? (
+                  <img src={meal.image} alt={meal.type} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-muted-foreground">
+                    <UtensilsCrossed className="h-7 w-7" />
+                  </div>
+                )}
+                <div className="absolute left-2 top-2">
+                  <MealTypeBadge type={meal.type} />
+                </div>
+              </div>
+              <div className="p-3">
+                <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Clock3 className="h-3.5 w-3.5" />
+                  {meal.time}
+                </p>
+                {meal.note && <p className="mt-1 line-clamp-2 text-sm">{meal.note}</p>}
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function normalizeMealEntry(meal: MealEntry & { imageUrl?: string; loggedAt?: string }): MealEntry {
+  const loggedAt = meal.loggedAt ? new Date(meal.loggedAt) : undefined;
+  return {
+    ...meal,
+    image: meal.image ?? meal.imageUrl ?? "",
+    timestamp: meal.timestamp ?? (loggedAt ? loggedAt.getTime() : Date.now()),
+    time:
+      meal.time ??
+      (loggedAt ? loggedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "Now"),
+  };
 }
 
 function AttendanceBadge({

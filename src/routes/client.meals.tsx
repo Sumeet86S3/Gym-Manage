@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   Camera,
   ImagePlus,
@@ -45,7 +45,9 @@ const MEAL_IMAGE_QUALITY = 0.78;
 
 function ClientMealsPage() {
   const { user } = useAuth();
-  const { data: loadedMeals, setData: setLoadedMeals } = useApiResource<MealEntry[]>("/meals", []);
+  const { data: loadedMeals, setData: setLoadedMeals } = useApiResource<
+    Array<MealEntry & { imageUrl?: string; loggedAt?: string }>
+  >("/meals", []);
   const fileRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
   const compressionIdRef = useRef(0);
@@ -62,7 +64,7 @@ function ClientMealsPage() {
   const [optimizingImage, setOptimizingImage] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const meals = loadedMeals;
+  const meals = useMemo(() => loadedMeals.map(normalizeMealEntry), [loadedMeals]);
   const setMeals = setLoadedMeals;
 
   const handleFile = (file: File | null | undefined) => {
@@ -333,6 +335,18 @@ function ClientMealsPage() {
       </section>
     </div>
   );
+}
+
+function normalizeMealEntry(meal: MealEntry & { imageUrl?: string; loggedAt?: string }): MealEntry {
+  const loggedAt = meal.loggedAt ? new Date(meal.loggedAt) : undefined;
+  return {
+    ...meal,
+    image: meal.image ?? meal.imageUrl ?? "",
+    timestamp: meal.timestamp ?? (loggedAt ? loggedAt.getTime() : Date.now()),
+    time:
+      meal.time ??
+      (loggedAt ? loggedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "Now"),
+  };
 }
 
 async function optimizeMealImage(file: File) {
