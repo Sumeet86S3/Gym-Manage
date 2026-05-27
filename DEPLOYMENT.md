@@ -30,3 +30,4 @@ Manual Render settings:
 - Build command: `npm ci`
 - Start command: `npm start`
 - Health check path: `/api/v1/health`
+
