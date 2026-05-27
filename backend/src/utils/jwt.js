@@ -41,7 +41,7 @@ export function setRefreshCookie(res, token, maxAge = env.REFRESH_COOKIE_MAX_AGE
   res.cookie("refreshToken", token, {
     httpOnly: true,
     secure: env.COOKIE_SECURE,
-    sameSite: env.isProduction ? "none" : "lax",
+    sameSite: "none",
     path: "/api/v1",
     maxAge,
   });
@@ -50,7 +50,7 @@ export function setRefreshCookie(res, token, maxAge = env.REFRESH_COOKIE_MAX_AGE
 export function clearRefreshCookie(res) {
   res.clearCookie("refreshToken", {
     secure: env.COOKIE_SECURE,
-    sameSite: env.isProduction ? "none" : "lax",
+    sameSite: "none",
     path: "/api/v1",
   });
 }
