@@ -45,6 +45,11 @@ export const trainers = sqliteTable(
       .notNull()
       .default("Pending"),
     joinedAt: text("joined_at").notNull(),
+    gymName: text("gym_name").notNull().default("FitSphere Elite Studio"),
+    gymAddress: text("gym_address").notNull().default("Indiranagar Performance Hub"),
+    gymLatitude: real("gym_latitude").notNull().default(12.9719),
+    gymLongitude: real("gym_longitude").notNull().default(77.6412),
+    attendanceRadiusMeters: integer("attendance_radius_meters").notNull().default(100),
     ...timestamps,
   },
   (table) => ({
@@ -147,6 +152,13 @@ export const attendance = sqliteTable(
     trainerId: text("trainer_id").references(() => trainers.id, { onDelete: "set null" }),
     date: text("date").notNull(),
     markedAt: text("marked_at").notNull(),
+    method: text("method", { enum: ["GPS", "Trainer"] })
+      .notNull()
+      .default("Trainer"),
+    latitude: real("latitude"),
+    longitude: real("longitude"),
+    accuracyMeters: real("accuracy_meters"),
+    distanceMeters: real("distance_meters"),
     ...timestamps,
   },
   (table) => ({

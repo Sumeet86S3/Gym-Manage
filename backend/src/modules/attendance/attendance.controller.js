@@ -9,3 +9,11 @@ export const list = asyncHandler(async (req, res) => {
 export const toggle = asyncHandler(async (req, res) => {
   created(res, await service.toggle(req.user, req.validated.body), "Attendance updated");
 });
+
+export const updateSettings = asyncHandler(async (req, res) => {
+  success(
+    res,
+    await service.updateSettings(req.user, req.validated.body),
+    "Attendance settings updated",
+  );
+});

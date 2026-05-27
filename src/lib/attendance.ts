@@ -25,9 +25,16 @@ export interface AttendanceHistoryEntry {
 export interface AttendanceResource {
   date: string;
   client?: unknown;
-  clients: Array<{ id: string; name: string; status?: string; streak?: number; [key: string]: unknown }>;
+  clients: Array<{
+    id: string;
+    name: string;
+    status?: string;
+    streak?: number;
+    [key: string]: unknown;
+  }>;
   entries: AttendanceHistoryEntry[];
   todayEntry?: AttendanceHistoryEntry | null;
+  gymSettings?: GymLocationSettings;
 }
 
 export interface MarkAttendanceResult {
@@ -35,6 +42,12 @@ export interface MarkAttendanceResult {
   alreadyMarked: boolean;
   entry: AttendanceHistoryEntry;
   client: unknown;
+}
+
+export interface AttendanceLocation {
+  latitude: number;
+  longitude: number;
+  accuracyMeters: number;
 }
 
 export const defaultGymSettings: GymLocationSettings = {
@@ -48,6 +61,12 @@ export const defaultGymSettings: GymLocationSettings = {
 
 const gymSettingsKey = "fitsphere:gym-location-settings";
 export const attendanceQueryKey = ["api", "/attendance"] as const;
+export const attendanceGpsAccuracyLimitMeters = 150;
+export const attendanceGeolocationOptions: PositionOptions = {
+  enableHighAccuracy: true,
+  timeout: 20000,
+  maximumAge: 5000,
+};
 
 export function calculateDistanceMeters(
   from: Pick<GymLocationSettings, "latitude" | "longitude">,
@@ -89,6 +108,67 @@ export function saveGymSettings(settings: GymLocationSettings) {
   window.localStorage.setItem(gymSettingsKey, JSON.stringify(settings));
 }
 
+export function normalizeGymSettings(settings?: Partial<GymLocationSettings> | null) {
+  if (!settings) return defaultGymSettings;
+  return {
+    ...defaultGymSettings,
+    ...settings,
+    latitude: Number(settings.latitude ?? defaultGymSettings.latitude),
+    longitude: Number(settings.longitude ?? defaultGymSettings.longitude),
+    radiusMeters: Number(settings.radiusMeters ?? defaultGymSettings.radiusMeters),
+  };
+}
+
+export function isValidGymSettings(settings: GymLocationSettings) {
+  return (
+    Number.isFinite(settings.latitude) &&
+    settings.latitude >= -90 &&
+    settings.latitude <= 90 &&
+    Number.isFinite(settings.longitude) &&
+    settings.longitude >= -180 &&
+    settings.longitude <= 180 &&
+    Number.isFinite(settings.radiusMeters) &&
+    settings.radiusMeters >= 50 &&
+    settings.radiusMeters <= 500
+  );
+}
+
+export function getFreshAttendanceLocation(): Promise<AttendanceLocation> {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error("Location access is not available on this device."));
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        resolve({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracyMeters: position.coords.accuracy,
+        });
+      },
+      (error) => {
+        reject(error);
+      },
+      attendanceGeolocationOptions,
+    );
+  });
+}
+
+export function getGeolocationErrorMessage(error: unknown) {
+  if (typeof error === "object" && error && "code" in error) {
+    const code = Number((error as { code: unknown }).code);
+    if (code === 1) {
+      return "GPS permission denied. Enable location access for this site or PWA.";
+    }
+    if (code === 3) {
+      return "Waiting for accurate GPS location. Move outdoors or try again.";
+    }
+  }
+  return "Location permission was denied or unavailable.";
+}
+
 export function useAttendance() {
   return useQuery({
     queryKey: attendanceQueryKey,
@@ -102,7 +182,7 @@ export function useAttendance() {
 export function useMarkAttendance() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input?: { clientId?: string; date?: string }) =>
+    mutationFn: (input?: { clientId?: string; date?: string; location?: AttendanceLocation }) =>
       api<MarkAttendanceResult>("/attendance", {
         method: "POST",
         body: JSON.stringify(input ?? {}),
@@ -112,6 +192,21 @@ export function useMarkAttendance() {
         queryClient.invalidateQueries({ queryKey: attendanceQueryKey }),
         queryClient.invalidateQueries({ queryKey: ["api", "/clients"] }),
       ]);
+    },
+  });
+}
+
+export function useUpdateAttendanceSettings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: GymLocationSettings) =>
+      api<GymLocationSettings>("/attendance/settings", {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      }),
+    onSuccess: async (settings) => {
+      saveGymSettings(settings);
+      await queryClient.invalidateQueries({ queryKey: attendanceQueryKey });
     },
   });
 }

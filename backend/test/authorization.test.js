@@ -55,28 +55,32 @@ const trainerUserA = user(ids.trainerUserA, "trainer-a@test.local", "trainer");
 const trainerUserB = user(ids.trainerUserB, "trainer-b@test.local", "trainer");
 const clientUserA = user(ids.clientUserA, "client-a@test.local", "client");
 
-await db.insert(users).values([
-  trainerUserA,
-  trainerUserB,
-  clientUserA,
-  user(ids.clientUserB, "client-b@test.local", "client"),
-]);
-await db.insert(trainers).values([
-  trainer(ids.trainerA, ids.trainerUserA),
-  trainer(ids.trainerB, ids.trainerUserB),
-]);
-await db.insert(clients).values([
-  client(ids.clientA, ids.clientUserA, ids.trainerA, "Client A"),
-  client(ids.clientB, ids.clientUserB, ids.trainerB, "Client B"),
-]);
-await db.insert(workouts).values([
-  workout(ids.workoutA, ids.trainerA, ids.clientA),
-  workout(ids.workoutB, ids.trainerB, ids.clientB),
-]);
-await db.insert(exercises).values([
-  exercise(ids.exerciseA, ids.workoutA),
-  exercise(ids.exerciseB, ids.workoutB),
-]);
+await db
+  .insert(users)
+  .values([
+    trainerUserA,
+    trainerUserB,
+    clientUserA,
+    user(ids.clientUserB, "client-b@test.local", "client"),
+  ]);
+await db
+  .insert(trainers)
+  .values([trainer(ids.trainerA, ids.trainerUserA), trainer(ids.trainerB, ids.trainerUserB)]);
+await db
+  .insert(clients)
+  .values([
+    client(ids.clientA, ids.clientUserA, ids.trainerA, "Client A"),
+    client(ids.clientB, ids.clientUserB, ids.trainerB, "Client B"),
+  ]);
+await db
+  .insert(workouts)
+  .values([
+    workout(ids.workoutA, ids.trainerA, ids.clientA),
+    workout(ids.workoutB, ids.trainerB, ids.clientB),
+  ]);
+await db
+  .insert(exercises)
+  .values([exercise(ids.exerciseA, ids.workoutA), exercise(ids.exerciseB, ids.workoutB)]);
 
 test("trainer cannot create a payment for another trainer's client", async () => {
   await assert.rejects(
@@ -96,10 +100,7 @@ test("trainer goal listing is restricted to owned clients", async () => {
   await goalsService.create(trainerUserB, goal(ids.clientB, "Goal B"));
 
   const rows = await goalsService.list(trainerUserA);
-  assert.deepEqual(
-    rows.map((row) => row.clientId).sort(),
-    [ids.clientA],
-  );
+  assert.deepEqual(rows.map((row) => row.clientId).sort(), [ids.clientA]);
 });
 
 test("trainer cannot create or list goals for another trainer's client", async () => {
@@ -153,6 +154,75 @@ test("attendance is mark-once across trainer and client views", async () => {
   assert.equal(clientView.entries.length, 1);
   assert.equal(clientView.todayEntry.id, first.entry.id);
   assert.equal(await countRows(attendance, attendance.clientId, ids.clientA), 1);
+});
+
+test("client attendance requires accurate GPS inside the trainer gym radius", async () => {
+  const date = "2026-05-27";
+  const result = await attendanceService.toggle(clientUserA, {
+    date,
+    location: {
+      latitude: 12.9719,
+      longitude: 77.6412,
+      accuracyMeters: 20,
+    },
+  });
+
+  assert.equal(result.marked, true);
+  assert.equal(result.alreadyMarked, false);
+  assert.equal(result.entry.method, "GPS");
+  assert.equal(Math.round(result.entry.distanceMeters), 0);
+});
+
+test("client attendance rejects poor GPS accuracy and outside-radius locations", async () => {
+  await assert.rejects(
+    attendanceService.toggle(clientUserA, {
+      date: "2026-05-28",
+      location: {
+        latitude: 12.9719,
+        longitude: 77.6412,
+        accuracyMeters: 400,
+      },
+    }),
+    (error) => error.statusCode === 400,
+  );
+
+  await assert.rejects(
+    attendanceService.toggle(clientUserA, {
+      date: "2026-05-29",
+      location: {
+        latitude: 12.9819,
+        longitude: 77.6512,
+        accuracyMeters: 20,
+      },
+    }),
+    (error) => error.statusCode === 403,
+  );
+});
+
+test("trainer attendance settings are validated and exposed to trainer and client views", async () => {
+  const settings = await attendanceService.updateSettings(trainerUserA, {
+    name: "Test Gym",
+    address: "Test Address",
+    latitude: 13.1,
+    longitude: 77.7,
+    radiusMeters: 180,
+  });
+  const trainerView = await attendanceService.list(trainerUserA, "2026-05-30");
+  const clientView = await attendanceService.list(clientUserA, "2026-05-30");
+
+  assert.equal(settings.name, "Test Gym");
+  assert.equal(trainerView.gymSettings.radiusMeters, 180);
+  assert.equal(clientView.gymSettings.latitude, 13.1);
+  await assert.rejects(
+    attendanceService.updateSettings(trainerUserA, {
+      name: "Bad Gym",
+      address: "Bad Address",
+      latitude: 120,
+      longitude: 77.7,
+      radiusMeters: 180,
+    }),
+    (error) => error.statusCode === 400,
+  );
 });
 
 test("trainer cannot delete another trainer's client", async () => {
@@ -345,10 +415,9 @@ async function createCascadeFixture(label, trainerId, trainerUserId) {
     createdAt: now,
     updatedAt: now,
   });
-  await db.insert(refreshSessions).values([
-    refreshSession(clientUserId),
-    refreshSession(trainerUserId),
-  ]);
+  await db
+    .insert(refreshSessions)
+    .values([refreshSession(clientUserId), refreshSession(trainerUserId)]);
   await db.insert(notifications).values({
     id: randomUUID(),
     userId: clientUserId,

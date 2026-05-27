@@ -28,12 +28,17 @@ import type { Workout } from "@/lib/live-data";
 import {
   calculateDistanceMeters,
   defaultGymSettings,
+  attendanceGpsAccuracyLimitMeters,
   formatDistance,
+  getFreshAttendanceLocation,
+  getGeolocationErrorMessage,
+  normalizeGymSettings,
   readGymSettings,
   normalizeAttendanceEntry,
   useAttendance,
   useMarkAttendance,
   type AttendanceHistoryEntry,
+  type AttendanceLocation,
   type GymLocationSettings,
 } from "@/lib/attendance";
 
@@ -60,9 +65,16 @@ function ClientWorkouts() {
   const [otherIssue, setOtherIssue] = useState("");
   const [notes, setNotes] = useState("");
   const [gymSettings, setGymSettings] = useState<GymLocationSettings>(defaultGymSettings);
-  const [clientLocation, setClientLocation] = useState<{ latitude: number; longitude: number }>();
+  const [clientLocation, setClientLocation] = useState<AttendanceLocation>();
   const [attendanceStatus, setAttendanceStatus] = useState<
-    "idle" | "checking" | "verified" | "denied"
+    | "idle"
+    | "detecting"
+    | "waiting"
+    | "verifying"
+    | "verified"
+    | "denied"
+    | "permission-denied"
+    | "gps-poor"
   >("idle");
   const attendance = useAttendance();
   const markAttendanceMutation = useMarkAttendance();
@@ -70,6 +82,13 @@ function ClientWorkouts() {
   useEffect(() => {
     setGymSettings(readGymSettings());
   }, []);
+
+  useEffect(() => {
+    if (attendance.data?.gymSettings) {
+      const next = normalizeGymSettings(attendance.data.gymSettings);
+      setGymSettings(next);
+    }
+  }, [attendance.data?.gymSettings]);
 
   const open = !!activeId;
   const close = () => {
@@ -115,31 +134,37 @@ function ClientWorkouts() {
   const alreadyMarked = Boolean(todayEntry);
   const clientHistory = attendanceEntries.slice(0, 4);
 
-  const markAttendance = () => {
+  const markAttendance = async () => {
     if (alreadyMarked) return;
     if (!navigator.geolocation) {
       toast.error("Location access is not available on this device.");
       return;
     }
 
-    setAttendanceStatus("checking");
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const location = {
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        };
-        const distance = calculateDistanceMeters(gymSettings, location);
-        const verified = distance <= gymSettings.radiusMeters;
+    setAttendanceStatus("detecting");
+    const waitingTimer = window.setTimeout(() => setAttendanceStatus("waiting"), 3500);
+    try {
+      const location = await getFreshAttendanceLocation();
+      window.clearTimeout(waitingTimer);
+      setClientLocation(location);
 
-        setClientLocation(location);
-        if (!verified) {
-          setAttendanceStatus("denied");
-          toast.error("Attendance denied. Move closer to the gym location.");
-          return;
-        }
+      if (location.accuracyMeters > attendanceGpsAccuracyLimitMeters) {
+        setAttendanceStatus("gps-poor");
+        toast.error("Waiting for accurate GPS location. Move outdoors or enable precise location.");
+        return;
+      }
 
-        markAttendanceMutation.mutate(undefined, {
+      const distance = calculateDistanceMeters(gymSettings, location);
+      if (distance > gymSettings.radiusMeters + Math.min(location.accuracyMeters, 50)) {
+        setAttendanceStatus("denied");
+        toast.error("Attendance denied. Move closer to the gym location.");
+        return;
+      }
+
+      setAttendanceStatus("verifying");
+      markAttendanceMutation.mutate(
+        { location },
+        {
           onSuccess: (result) => {
             setAttendanceStatus("verified");
             toast.success(
@@ -152,14 +177,16 @@ function ClientWorkouts() {
             setAttendanceStatus("idle");
             toast.error(error instanceof Error ? error.message : "Unable to mark attendance.");
           },
-        });
-      },
-      () => {
-        setAttendanceStatus("idle");
-        toast.error("Location permission was denied or unavailable.");
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
-    );
+        },
+      );
+    } catch (error) {
+      window.clearTimeout(waitingTimer);
+      const message = getGeolocationErrorMessage(error);
+      setAttendanceStatus(
+        message.toLowerCase().includes("permission") ? "permission-denied" : "idle",
+      );
+      toast.error(message);
+    }
   };
 
   return (
@@ -208,10 +235,18 @@ function ClientWorkouts() {
                     alreadyMarked
                       ? "Marked"
                       : attendanceStatus === "verified"
-                      ? "Verified"
-                      : attendanceStatus === "denied"
-                        ? "Denied"
-                        : "Ready"
+                        ? "Verified"
+                        : attendanceStatus === "verifying"
+                          ? "Verifying"
+                          : attendanceStatus === "denied"
+                            ? "Denied"
+                            : attendanceStatus === "gps-poor"
+                              ? "GPS weak"
+                              : attendanceStatus === "permission-denied"
+                                ? "Permission denied"
+                                : attendanceStatus === "detecting" || attendanceStatus === "waiting"
+                                  ? "Detecting"
+                                  : "Ready"
                   }
                   icon={
                     attendanceStatus === "denied" ? (
@@ -235,11 +270,21 @@ function ClientWorkouts() {
               >
                 {alreadyMarked
                   ? "Today attendance has been marked."
-                  : currentDistance === undefined
-                  ? "Tap Mark Attendance to request location access and calculate your real-time gym distance."
-                  : insideRadius
-                    ? `You are ${formatDistance(currentDistance)} away, inside the approved radius.`
-                    : `You are ${formatDistance(currentDistance)} away, outside the approved radius.`}
+                  : attendanceStatus === "detecting"
+                    ? "Detecting location..."
+                    : attendanceStatus === "waiting"
+                      ? "Waiting for accurate GPS location. Move outdoors or enable precise location."
+                      : attendanceStatus === "verifying" || markAttendanceMutation.isPending
+                        ? "Verifying attendance with FitSphere."
+                        : attendanceStatus === "gps-poor"
+                          ? "Move outdoors or enable precise location, then try again."
+                          : attendanceStatus === "permission-denied"
+                            ? "GPS permission denied. Enable location access for this site or PWA."
+                            : currentDistance === undefined
+                              ? "Tap Mark Attendance to request location access and calculate your real-time gym distance."
+                              : insideRadius
+                                ? `You are ${formatDistance(currentDistance)} away, inside the approved radius.`
+                                : `You are ${formatDistance(currentDistance)} away, outside the approved radius.`}
               </div>
             </div>
 
@@ -258,17 +303,27 @@ function ClientWorkouts() {
               ) : (
                 <button
                   onClick={markAttendance}
-                  disabled={attendanceStatus === "checking" || markAttendanceMutation.isPending}
+                  disabled={
+                    attendanceStatus === "detecting" ||
+                    attendanceStatus === "waiting" ||
+                    attendanceStatus === "verifying" ||
+                    markAttendanceMutation.isPending
+                  }
                   className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-card transition hover:bg-primary/90 disabled:opacity-70"
                 >
-                  {attendanceStatus === "checking" || markAttendanceMutation.isPending ? (
+                  {attendanceStatus === "detecting" ||
+                  attendanceStatus === "waiting" ||
+                  attendanceStatus === "verifying" ||
+                  markAttendanceMutation.isPending ? (
                     <Clock3 className="h-4 w-4 animate-spin" />
                   ) : (
                     <MapPin className="h-4 w-4" />
                   )}
-                  {attendanceStatus === "checking" || markAttendanceMutation.isPending
-                    ? "Checking location"
-                    : "Mark Attendance"}
+                  {attendanceStatus === "detecting" || attendanceStatus === "waiting"
+                    ? "Detecting location"
+                    : attendanceStatus === "verifying" || markAttendanceMutation.isPending
+                      ? "Verifying attendance"
+                      : "Mark Attendance"}
                 </button>
               )}
             </div>
@@ -440,20 +495,37 @@ function ClientWorkouts() {
 function AttendanceBadge({
   status,
 }: {
-  status: "idle" | "checking" | "verified" | "denied" | "marked";
+  status:
+    | "idle"
+    | "detecting"
+    | "waiting"
+    | "verifying"
+    | "verified"
+    | "denied"
+    | "permission-denied"
+    | "gps-poor"
+    | "marked";
 }) {
   const styles = {
     idle: "bg-muted text-muted-foreground",
-    checking: "bg-info/15 text-info",
+    detecting: "bg-info/15 text-info",
+    waiting: "bg-warning/15 text-warning",
+    verifying: "bg-info/15 text-info",
     verified: "bg-success/15 text-success",
     denied: "bg-destructive/15 text-destructive",
+    "permission-denied": "bg-destructive/15 text-destructive",
+    "gps-poor": "bg-warning/15 text-warning",
     marked: "bg-success/15 text-success",
   };
   const label = {
     idle: "Not marked",
-    checking: "Verifying",
+    detecting: "Detecting location",
+    waiting: "Waiting for GPS",
+    verifying: "Verifying",
     verified: "Verified attendance",
     denied: "Outside radius",
+    "permission-denied": "GPS permission denied",
+    "gps-poor": "GPS accuracy low",
     marked: "Marked today",
   };
 
@@ -464,7 +536,7 @@ function AttendanceBadge({
         styles[status],
       )}
     >
-      {status === "denied" ? (
+      {status === "denied" || status === "permission-denied" ? (
         <XCircle className="h-3.5 w-3.5" />
       ) : (
         <ShieldCheck className="h-3.5 w-3.5" />

@@ -24,11 +24,16 @@ import {
   calculateDistanceMeters,
   defaultGymSettings,
   formatDistance,
+  getFreshAttendanceLocation,
+  getGeolocationErrorMessage,
+  isValidGymSettings,
+  normalizeGymSettings,
   readGymSettings,
   saveGymSettings,
   normalizeAttendanceEntry,
   useAttendance,
   useMarkAttendance,
+  useUpdateAttendanceSettings,
   type AttendanceHistoryEntry,
   type GymLocationSettings,
 } from "@/lib/attendance";
@@ -40,6 +45,7 @@ export const Route = createFileRoute("/trainer/attendance")({
 function AttendancePage() {
   const attendance = useAttendance();
   const markAttendanceMutation = useMarkAttendance();
+  const updateAttendanceSettingsMutation = useUpdateAttendanceSettings();
   const data = (attendance.data ?? { clients: [], entries: [] }) as {
     clients: Client[];
     entries: AttendanceHistoryEntry[];
@@ -50,6 +56,14 @@ function AttendancePage() {
   useEffect(() => {
     setGymSettings(readGymSettings());
   }, []);
+
+  useEffect(() => {
+    if (attendance.data?.gymSettings) {
+      const next = normalizeGymSettings(attendance.data.gymSettings);
+      setGymSettings(next);
+      saveGymSettings(next);
+    }
+  }, [attendance.data?.gymSettings]);
 
   const entries = data.entries.map(normalizeAttendanceEntry);
   const todayEntries = entries.filter((entry) => isToday(entry.markedAt));
@@ -64,31 +78,45 @@ function AttendancePage() {
   };
 
   const saveSettings = () => {
+    if (!isValidGymSettings(gymSettings)) {
+      toast.error("Enter valid coordinates and a radius between 50 m and 500 m.");
+      return;
+    }
     const next = { ...gymSettings, updatedAt: new Date().toISOString() };
-    setGymSettings(next);
-    saveGymSettings(next);
-    toast.success("Gym location settings saved for all clients.");
+    updateAttendanceSettingsMutation.mutate(next, {
+      onSuccess: (settings) => {
+        setGymSettings(settings);
+        toast.success("Gym location settings saved for all clients.");
+      },
+      onError: (error) => {
+        toast.error(error instanceof Error ? error.message : "Unable to save gym settings.");
+      },
+    });
   };
 
-  const useCurrentLocation = () => {
+  const useCurrentLocation = async () => {
     if (!navigator.geolocation) {
       toast.error("Location access is not available on this device.");
       return;
     }
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const location = {
-          latitude: Number(position.coords.latitude.toFixed(6)),
-          longitude: Number(position.coords.longitude.toFixed(6)),
-        };
-        setTrainerLocation(location);
-        setGymSettings((settings) => ({ ...settings, ...location }));
-        toast.success("Current location applied to gym settings.");
-      },
-      () => toast.error("Location permission was denied or unavailable."),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
-    );
+    try {
+      const location = await getFreshAttendanceLocation();
+      const coordinates = {
+        latitude: Number(location.latitude.toFixed(6)),
+        longitude: Number(location.longitude.toFixed(6)),
+        accuracyMeters: Math.round(location.accuracyMeters),
+      };
+      setTrainerLocation(coordinates);
+      setGymSettings((settings) => ({ ...settings, ...coordinates }));
+      toast.success(
+        location.accuracyMeters > 150
+          ? "Location applied, but GPS accuracy is weak. Move outdoors before saving."
+          : "Current location applied to gym settings.",
+      );
+    } catch (error) {
+      toast.error(getGeolocationErrorMessage(error));
+    }
   };
 
   const markManualAttendance = (client: Client) => {
@@ -100,7 +128,9 @@ function AttendancePage() {
       {
         onSuccess: (result) => {
           toast.success(
-            result.alreadyMarked ? "Today attendance has been marked." : "Manual attendance marked.",
+            result.alreadyMarked
+              ? "Today attendance has been marked."
+              : "Manual attendance marked.",
           );
         },
         onError: (error) => {
@@ -155,9 +185,13 @@ function AttendancePage() {
                   This location and radius applies to every client assigned to you.
                 </p>
               </div>
-              <Button onClick={saveSettings} className="shrink-0">
+              <Button
+                onClick={saveSettings}
+                disabled={updateAttendanceSettingsMutation.isPending}
+                className="shrink-0"
+              >
                 <Save className="h-4 w-4" />
-                Save settings
+                {updateAttendanceSettingsMutation.isPending ? "Saving" : "Save settings"}
               </Button>
             </div>
           </div>
@@ -186,6 +220,8 @@ function AttendancePage() {
                   <input
                     type="number"
                     step="0.000001"
+                    min="-90"
+                    max="90"
                     value={gymSettings.latitude}
                     onChange={(event) => updateSettings({ latitude: Number(event.target.value) })}
                     className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
@@ -196,6 +232,8 @@ function AttendancePage() {
                   <input
                     type="number"
                     step="0.000001"
+                    min="-180"
+                    max="180"
                     value={gymSettings.longitude}
                     onChange={(event) => updateSettings({ longitude: Number(event.target.value) })}
                     className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
@@ -255,7 +293,7 @@ function AttendancePage() {
             <p className="text-sm font-medium text-muted-foreground">Client roster</p>
             <h2 className="text-lg font-semibold">Manual attendance override</h2>
           </div>
-          <StatusBadge tone="success">GPS verified badge enabled</StatusBadge>
+          <StatusBadge tone="success">Trainer controlled</StatusBadge>
         </div>
 
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
