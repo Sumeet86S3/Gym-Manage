@@ -74,7 +74,7 @@ const clientNav: NavItem[] = [
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const { user, loading, status, logout } = useAuth();
+  const { user, loading, status, logout, logoutAll } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -108,8 +108,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   const roleLabel =
     user.role === "admin" ? "Admin" : user.role === "trainer" ? "Trainer" : "Member";
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
+    navigate({ to: "/login" });
+  };
+
+  const handleLogoutAll = async () => {
+    await logoutAll();
     navigate({ to: "/login" });
   };
 
@@ -190,6 +195,9 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout}>
                   <LogOut className="mr-2 h-4 w-4" /> Sign out
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleLogoutAll}>
+                  <ShieldCheck className="mr-2 h-4 w-4" /> Sign out all devices
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

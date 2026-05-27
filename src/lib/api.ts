@@ -1,9 +1,9 @@
+import { trackEvent } from "./telemetry";
+
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000/api/v1";
 const LEGACY_TOKEN_KEY = "fitsphere_access_token";
-const SESSION_TOKEN_KEY = "fitsphere_session_token";
 const REFRESH_TOKEN_KEY = "fitsphere_refresh_token";
 let accessToken: string | null = null;
-let refreshToken: string | null = null;
 let refreshPromise: Promise<string | null> | null = null;
 let refreshError: unknown = null;
 
@@ -26,60 +26,14 @@ export class ApiError extends Error {
 }
 
 export function getAccessToken() {
-  // Return in-memory token if available
-  if (accessToken) return accessToken;
-  
-  // Fallback to sessionStorage (useful for page reloads)
-  if (typeof window !== "undefined") {
-    const storedToken = window.sessionStorage.getItem(SESSION_TOKEN_KEY);
-    if (storedToken) {
-      accessToken = storedToken;
-      return storedToken;
-    }
-  }
-  
-  return null;
-}
-
-export function getRefreshToken() {
-  if (refreshToken) return refreshToken;
-  
-  if (typeof window !== "undefined") {
-    // Check localStorage first (persists across app closures for PWA)
-    const storedToken = window.localStorage.getItem(REFRESH_TOKEN_KEY);
-    if (storedToken) {
-      refreshToken = storedToken;
-      return storedToken;
-    }
-  }
-  
-  return null;
+  return accessToken;
 }
 
 export function setAccessToken(token: string | null) {
   accessToken = token;
   if (typeof window !== "undefined") {
     window.localStorage.removeItem(LEGACY_TOKEN_KEY);
-    if (token) {
-      // Store in sessionStorage for recovery on page reload
-      window.sessionStorage.setItem(SESSION_TOKEN_KEY, token);
-    } else {
-      // Clear sessionStorage when logging out
-      window.sessionStorage.removeItem(SESSION_TOKEN_KEY);
-    }
-  }
-}
-
-export function setRefreshToken(token: string | null) {
-  refreshToken = token;
-  if (typeof window !== "undefined") {
-    if (token) {
-      // Store in localStorage so it persists across app closures (PWA support)
-      window.localStorage.setItem(REFRESH_TOKEN_KEY, token);
-    } else {
-      // Clear localStorage when logging out
-      window.localStorage.removeItem(REFRESH_TOKEN_KEY);
-    }
+    window.localStorage.removeItem(REFRESH_TOKEN_KEY);
   }
 }
 
@@ -92,6 +46,11 @@ async function request<T>(
   options: RequestInit = {},
   allowRefresh: boolean,
 ): Promise<T> {
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    trackEvent({ level: "warn", area: "api", message: "Request blocked while offline", path });
+    throw new ApiError("You are offline. Reconnect to continue securely.", 0);
+  }
+
   const token = getAccessToken();
   const headers = new Headers(options.headers);
   if (!headers.has("Content-Type") && options.body) headers.set("Content-Type", "application/json");
@@ -105,7 +64,8 @@ async function request<T>(
       credentials: "include",
       cache: "no-store",
     });
-  } catch {
+  } catch (error) {
+    trackEvent({ level: "warn", area: "api", message: "Network request failed", path, error });
     throw new ApiError("Unable to reach FitSphere. Reconnect to load live data.", 0);
   }
 
@@ -118,6 +78,13 @@ async function request<T>(
   }
 
   if (!response.ok) {
+    trackEvent({
+      level: response.status >= 500 ? "error" : "warn",
+      area: path.startsWith("/auth") ? "auth" : "api",
+      message: "API request failed",
+      status: response.status,
+      path,
+    });
     throw new ApiError(payload?.message ?? "Request failed", response.status, payload?.details);
   }
 
@@ -127,26 +94,22 @@ async function request<T>(
 export async function refreshAccessToken(options: { throwOnFailure?: boolean } = {}) {
   if (!refreshPromise) {
     refreshError = null;
-    refreshPromise = request<{ user: unknown; accessToken: string; refreshToken?: string }>(
+    refreshPromise = request<{ user: unknown; accessToken: string }>(
       "/auth/refresh",
       {
         method: "POST",
-        body: JSON.stringify({ refreshToken: getRefreshToken() }),
       },
       false,
     )
       .then((data) => {
         setAccessToken(data.accessToken);
-        // Update refresh token if backend sends a new one (for token rotation)
-        if (data.refreshToken) {
-          setRefreshToken(data.refreshToken);
-        }
         return data.accessToken;
       })
       .catch((error) => {
         refreshError = error;
-        setAccessToken(null);
-        setRefreshToken(null);
+        if (!(error instanceof ApiError && error.status === 0)) {
+          setAccessToken(null);
+        }
         return null;
       })
       .finally(() => {

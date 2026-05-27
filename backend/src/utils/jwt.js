@@ -14,7 +14,7 @@ export function signAccessToken(user) {
   );
 }
 
-export function signRefreshToken(user, session) {
+export function signRefreshToken(user, session, expiresIn = env.JWT_REFRESH_EXPIRES_IN) {
   return jwt.sign(
     {
       sub: user.id,
@@ -24,7 +24,7 @@ export function signRefreshToken(user, session) {
     },
     env.JWT_REFRESH_SECRET,
     {
-      expiresIn: env.JWT_REFRESH_EXPIRES_IN,
+      expiresIn,
     },
   );
 }
@@ -37,13 +37,13 @@ export function verifyRefreshToken(token) {
   return jwt.verify(token, env.JWT_REFRESH_SECRET);
 }
 
-export function setRefreshCookie(res, token) {
+export function setRefreshCookie(res, token, maxAge = env.REFRESH_COOKIE_MAX_AGE_MS) {
   res.cookie("refreshToken", token, {
     httpOnly: true,
     secure: env.COOKIE_SECURE,
     sameSite: env.isProduction ? "none" : "lax",
     path: "/api/v1",
-    maxAge: env.REFRESH_COOKIE_MAX_AGE_MS,
+    maxAge,
   });
 }
 

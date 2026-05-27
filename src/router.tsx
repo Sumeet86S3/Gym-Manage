@@ -1,8 +1,19 @@
 import { createRouter, useRouter } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { routeTree } from "./routeTree.gen";
+import { trackEvent } from "./lib/telemetry";
 
 function DefaultErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   const router = useRouter();
+  useEffect(() => {
+    trackEvent({
+      level: "error",
+      area: "route",
+      message: "Route render error",
+      error,
+      path: typeof window !== "undefined" ? window.location.pathname : undefined,
+    });
+  }, [error]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">

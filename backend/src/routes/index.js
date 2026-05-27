@@ -19,6 +19,11 @@ apiRoutes.get("/health", (_req, res) => {
   success(res, { status: "ok", service: "fitsphere-api", uptime: process.uptime() });
 });
 
+apiRoutes.post("/telemetry", (req, res) => {
+  req.log?.warn({ clientTelemetry: req.body }, "Client telemetry event");
+  success(res, null, "Telemetry accepted");
+});
+
 apiRoutes.use("/auth", authRoutes);
 apiRoutes.use("/users", userRoutes);
 apiRoutes.use("/trainers", trainerRoutes);

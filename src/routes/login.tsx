@@ -24,6 +24,7 @@ function LoginPage() {
   const [role, setRole] = useState<UserRole>("trainer");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -35,14 +36,39 @@ function LoginPage() {
     }
   }, [user, loading, navigate]);
 
-  if (loading) return null;
+  if (loading) {
+    return (
+      <AuthPageFrame>
+        <div className="w-full max-w-sm rounded-3xl glass-strong p-8 text-center shadow-elevated">
+          <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <Activity className="h-5 w-5" />
+          </div>
+          <p className="font-semibold">Restoring session...</p>
+          <p className="mt-1 text-sm text-muted-foreground">Checking your secure FitSphere session.</p>
+        </div>
+      </AuthPageFrame>
+    );
+  }
+  if (!user && typeof navigator !== "undefined" && !navigator.onLine) {
+    return (
+      <AuthPageFrame>
+        <div className="w-full max-w-sm rounded-3xl glass-strong p-8 text-center shadow-elevated">
+          <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <Activity className="h-5 w-5" />
+          </div>
+          <p className="font-semibold">You are offline</p>
+          <p className="mt-1 text-sm text-muted-foreground">Reconnect to restore or start a secure session.</p>
+        </div>
+      </AuthPageFrame>
+    );
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setSubmitting(true);
     try {
-      const user = await login(email, password, role);
+      const user = await login(email, password, role, rememberMe);
       if (user.role === "trainer" && !user.approved) {
         navigate({ to: "/signup" });
         return;
@@ -142,6 +168,15 @@ function LoginPage() {
                   inputClassName="w-full rounded-xl border border-input bg-background/60 px-3.5 py-2.5 text-sm shadow-soft outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30"
                 />
               </Field>
+              <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="h-4 w-4 rounded border-input accent-primary"
+                />
+                Remember me on this device
+              </label>
               <button
                 type="submit"
                 disabled={submitting}
@@ -168,6 +203,19 @@ function LoginPage() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function AuthPageFrame({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="relative flex min-h-screen items-center justify-center px-4">
+      <div className="absolute inset-0 -z-10">
+        <img src={authBg} alt="" className="h-full w-full object-cover opacity-60 dark:opacity-70" />
+        <div className="absolute inset-0 bg-gradient-to-br from-background/70 via-background/85 to-background" />
+        <div className="absolute inset-0 bg-grid opacity-50" />
+      </div>
+      {children}
     </div>
   );
 }

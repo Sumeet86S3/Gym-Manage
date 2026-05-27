@@ -42,8 +42,8 @@ function SignupPage() {
             You'll get access once an admin approves your application.
           </p>
           <button
-            onClick={() => {
-              logout();
+            onClick={async () => {
+              await logout();
               navigate({ to: "/login" });
             }}
             className="mt-6 w-full rounded-xl border border-border bg-card/60 px-4 py-2.5 text-sm font-medium hover:bg-muted"

@@ -87,6 +87,18 @@ export default defineConfig({
           {
             urlPattern: ({ url }) =>
               url.origin === self.location.origin &&
+              (/^\/api(?:\/|$)/.test(url.pathname) ||
+                /^\/auth(?:\/|$)/.test(url.pathname) ||
+                /\/auth\//.test(url.pathname)),
+            handler: "NetworkOnly",
+            method: "POST",
+            options: {
+              cacheName: "fitsphere-api-network-only",
+            },
+          },
+          {
+            urlPattern: ({ url }) =>
+              url.origin === self.location.origin &&
               /^\/assets\/.+\.(?:js|css|woff2?|png|svg|webp|jpe?g)$/.test(url.pathname),
             handler: "StaleWhileRevalidate",
             options: {

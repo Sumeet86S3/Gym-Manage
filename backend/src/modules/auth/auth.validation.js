@@ -5,6 +5,7 @@ export const loginSchema = z.object({
     email: z.string().email(),
     password: z.string().min(1),
     role: z.enum(["admin", "trainer", "client"]).optional(),
+    rememberMe: z.boolean().optional().default(false),
   }),
 });
 

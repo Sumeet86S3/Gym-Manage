@@ -10,6 +10,7 @@ const envSchema = z.object({
   JWT_REFRESH_SECRET: z.string().min(32, "JWT_REFRESH_SECRET must be at least 32 characters"),
   JWT_ACCESS_EXPIRES_IN: z.string().default("15m"),
   JWT_REFRESH_EXPIRES_IN: z.string().default("30d"),
+  JWT_REFRESH_SESSION_EXPIRES_IN: z.string().default("12h"),
   COOKIE_SECURE: z.coerce.boolean().default(false),
   RATE_LIMIT_WINDOW_MS: z.coerce
     .number()
@@ -48,6 +49,7 @@ export const env = {
   ...parsed.data,
   isProduction: parsed.data.NODE_ENV === "production",
   REFRESH_COOKIE_MAX_AGE_MS: 30 * 24 * 60 * 60 * 1000,
+  SESSION_REFRESH_COOKIE_MAX_AGE_MS: 12 * 60 * 60 * 1000,
   corsOrigins,
   corsOriginPatterns: corsOrigins.map(originPattern).filter(Boolean),
 };
