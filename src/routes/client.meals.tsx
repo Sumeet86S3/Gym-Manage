@@ -48,6 +48,7 @@ const mealOptions: { value: MealType; icon: LucideIcon; hint: string }[] = [
 const MAX_MEAL_IMAGE_SIZE = 10 * 1024 * 1024;
 const MEAL_IMAGE_MAX_DIMENSION = 1600;
 const MEAL_IMAGE_QUALITY = 0.78;
+const MEAL_UPLOAD_TIMEOUT_MS = 60_000;
 
 function ClientMealsPage() {
   const { user } = useAuth();
@@ -142,6 +143,7 @@ function ClientMealsPage() {
         loggedAt: string;
       }>("/meals", {
         method: "POST",
+        timeoutMs: MEAL_UPLOAD_TIMEOUT_MS,
         body: JSON.stringify({
           type,
           note: note.trim() || undefined,

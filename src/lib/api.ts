@@ -8,6 +8,10 @@ let accessToken: string | null = null;
 let refreshPromise: Promise<string | null> | null = null;
 let refreshError: unknown = null;
 
+type ApiRequestInit = RequestInit & {
+  timeoutMs?: number;
+};
+
 interface ApiEnvelope<T> {
   success: boolean;
   message: string;
@@ -38,13 +42,13 @@ export function setAccessToken(token: string | null) {
   }
 }
 
-export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
+export async function api<T>(path: string, options: ApiRequestInit = {}): Promise<T> {
   return request<T>(path, options, true);
 }
 
 async function request<T>(
   path: string,
-  options: RequestInit = {},
+  options: ApiRequestInit = {},
   allowRefresh: boolean,
 ): Promise<T> {
   if (typeof navigator !== "undefined" && !navigator.onLine) {
@@ -53,18 +57,19 @@ async function request<T>(
   }
 
   const token = getAccessToken();
+  const { timeoutMs = REQUEST_TIMEOUT_MS, ...fetchOptions } = options;
   const headers = new Headers(options.headers);
   if (!headers.has("Content-Type") && options.body) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
   let response: Response;
   const timeoutController = new AbortController();
-  const timeoutId = window.setTimeout(() => timeoutController.abort(), REQUEST_TIMEOUT_MS);
+  const timeoutId = window.setTimeout(() => timeoutController.abort(), timeoutMs);
   const signal = mergeSignals(options.signal, timeoutController.signal);
 
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
-      ...options,
+      ...fetchOptions,
       headers,
       credentials: "include",
       cache: "no-store",
