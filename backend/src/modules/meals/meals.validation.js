@@ -1,8 +1,18 @@
 import { z } from "zod";
 
+const mealTypes = [
+  "Warm water",
+  "Breakfast",
+  "Lunch",
+  "Evening Snack",
+  "Dinner",
+  "Pre-Workout",
+  "Post-Workout",
+];
+
 export const listMealsSchema = z.object({
   query: z.object({
-    type: z.enum(["Breakfast", "Lunch", "Dinner", "Snacks", "all"]).optional(),
+    type: z.enum([...mealTypes, "all"]).optional(),
     range: z.enum(["today", "week", "all"]).optional(),
     search: z.string().optional(),
   }),
@@ -10,7 +20,7 @@ export const listMealsSchema = z.object({
 
 export const createMealSchema = z.object({
   body: z.object({
-    type: z.enum(["Breakfast", "Lunch", "Dinner", "Snacks"]),
+    type: z.enum(mealTypes),
     note: z.string().max(1000).optional(),
     imageData: z
       .string()

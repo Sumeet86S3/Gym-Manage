@@ -1,8 +1,14 @@
-import { Coffee, Salad, Soup, Cookie } from "lucide-react";
+import { Coffee, Salad, Soup, Cookie, Dumbbell, Droplets } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import type { MealType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const config: Record<MealType, { icon: typeof Coffee; cls: string; dot: string }> = {
+const config: Record<MealType, { icon: LucideIcon; cls: string; dot: string }> = {
+  "Warm water": {
+    icon: Droplets,
+    cls: "bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 border-cyan-500/25",
+    dot: "bg-cyan-500",
+  },
   Breakfast: {
     icon: Coffee,
     cls: "bg-orange-500/15 text-orange-600 dark:text-orange-400 border-orange-500/25",
@@ -13,15 +19,25 @@ const config: Record<MealType, { icon: typeof Coffee; cls: string; dot: string }
     cls: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/25",
     dot: "bg-emerald-500",
   },
+  "Evening Snack": {
+    icon: Cookie,
+    cls: "bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/25",
+    dot: "bg-purple-500",
+  },
   Dinner: {
     icon: Soup,
     cls: "bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/25",
     dot: "bg-blue-500",
   },
-  Snacks: {
-    icon: Cookie,
-    cls: "bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/25",
-    dot: "bg-purple-500",
+  "Pre-Workout": {
+    icon: Dumbbell,
+    cls: "bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/25",
+    dot: "bg-rose-500",
+  },
+  "Post-Workout": {
+    icon: Dumbbell,
+    cls: "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border-indigo-500/25",
+    dot: "bg-indigo-500",
   },
 };
 

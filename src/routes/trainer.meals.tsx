@@ -50,7 +50,16 @@ function TrainerMealsPage() {
     () => Array.from(new Set(normalized.map((m) => m.clientName))),
     [normalized],
   );
-  const typeChips: TypeFilter[] = ["all", "Breakfast", "Lunch", "Dinner", "Snacks"];
+  const typeChips: TypeFilter[] = [
+    "all",
+    "Warm water",
+    "Breakfast",
+    "Lunch",
+    "Evening Snack",
+    "Dinner",
+    "Pre-Workout",
+    "Post-Workout",
+  ];
   const stats = {
     total: normalized.length,
     clients: new Set(normalized.map((m) => m.clientId)).size,

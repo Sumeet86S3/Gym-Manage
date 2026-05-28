@@ -2,16 +2,19 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useRef, useState } from "react";
 import {
   Camera,
+  Cookie,
   ImagePlus,
   Loader2,
   UploadCloud,
   X,
   Coffee,
+  Dumbbell,
+  Droplets,
   Salad,
   Soup,
-  Cookie,
   Clock,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/app-shell";
 import { MealTypeBadge } from "@/components/meal/meal-type-badge";
@@ -32,11 +35,14 @@ export const Route = createFileRoute("/client/meals")({
   component: ClientMealsPage,
 });
 
-const mealOptions: { value: MealType; icon: typeof Coffee; hint: string }[] = [
+const mealOptions: { value: MealType; icon: LucideIcon; hint: string }[] = [
+  { value: "Warm water", icon: Droplets, hint: "Hydration check" },
   { value: "Breakfast", icon: Coffee, hint: "Morning fuel" },
   { value: "Lunch", icon: Salad, hint: "Midday refuel" },
+  { value: "Evening Snack", icon: Cookie, hint: "Light evening bite" },
   { value: "Dinner", icon: Soup, hint: "Evening recovery" },
-  { value: "Snacks", icon: Cookie, hint: "In-between bites" },
+  { value: "Pre-Workout", icon: Dumbbell, hint: "Before training" },
+  { value: "Post-Workout", icon: Dumbbell, hint: "After training" },
 ];
 
 const MAX_MEAL_IMAGE_SIZE = 10 * 1024 * 1024;

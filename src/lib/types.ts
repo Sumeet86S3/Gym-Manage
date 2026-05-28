@@ -55,7 +55,14 @@ export interface FeedbackEntry {
   notes?: string;
 }
 
-export type MealType = "Breakfast" | "Lunch" | "Dinner" | "Snacks";
+export type MealType =
+  | "Warm water"
+  | "Breakfast"
+  | "Lunch"
+  | "Evening Snack"
+  | "Dinner"
+  | "Pre-Workout"
+  | "Post-Workout";
 
 export interface MealEntry {
   id: string;

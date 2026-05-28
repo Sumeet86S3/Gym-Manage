@@ -133,7 +133,17 @@ export const mealLogs = sqliteTable(
     clientId: text("client_id")
       .notNull()
       .references(() => clients.id, { onDelete: "cascade" }),
-    type: text("type", { enum: ["Breakfast", "Lunch", "Dinner", "Snacks"] }).notNull(),
+    type: text("type", {
+      enum: [
+        "Warm water",
+        "Breakfast",
+        "Lunch",
+        "Evening Snack",
+        "Dinner",
+        "Pre-Workout",
+        "Post-Workout",
+      ],
+    }).notNull(),
     note: text("note"),
     imageUrl: text("image_url").notNull(),
     loggedAt: text("logged_at").notNull(),
