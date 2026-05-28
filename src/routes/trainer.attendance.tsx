@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import {
   CalendarCheck,
   Check,
@@ -184,6 +184,12 @@ function AttendancePage() {
                 <p className="mt-1 text-sm text-muted-foreground">
                   This location and radius applies to every client assigned to you.
                 </p>
+                {!gymSettings.isConfigured && (
+                  <p className="mt-2 max-w-2xl text-sm text-warning">
+                    Clients cannot self-mark attendance until you save this gym location. You can
+                    still mark attendance for them from the roster.
+                  </p>
+                )}
               </div>
               <Button
                 onClick={saveSettings}
@@ -191,61 +197,48 @@ function AttendancePage() {
                 className="shrink-0"
               >
                 <Save className="h-4 w-4" />
-                {updateAttendanceSettingsMutation.isPending ? "Saving" : "Save settings"}
+                {updateAttendanceSettingsMutation.isPending
+                  ? "Saving"
+                  : gymSettings.isConfigured
+                    ? "Save settings"
+                    : "Set gym location"}
               </Button>
             </div>
           </div>
 
           <div className="grid gap-5 p-5 lg:grid-cols-[minmax(0,1fr)_300px]">
             <div className="space-y-4">
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-3">
                 <label className="space-y-1.5">
-                  <span className="text-sm font-medium">Gym name</span>
+                  <span className="text-sm font-semibold">Gym Location</span>
                   <input
                     value={gymSettings.name}
                     onChange={(event) => updateSettings({ name: event.target.value })}
-                    className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    placeholder="Search or enter gym address"
+                    className="w-full rounded-lg bg-background px-3 py-2 text-sm ring-1 ring-input/70 transition focus:outline-none focus:ring-1 focus:ring-primary/50"
                   />
                 </label>
                 <label className="space-y-1.5">
-                  <span className="text-sm font-medium">Address label</span>
+                  <span className="text-sm font-medium text-muted-foreground">Internal Label</span>
                   <input
                     value={gymSettings.address}
                     onChange={(event) => updateSettings({ address: event.target.value })}
-                    className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  />
-                </label>
-                <label className="space-y-1.5">
-                  <span className="text-sm font-medium">Latitude</span>
-                  <input
-                    type="number"
-                    step="0.000001"
-                    min="-90"
-                    max="90"
-                    value={gymSettings.latitude}
-                    onChange={(event) => updateSettings({ latitude: Number(event.target.value) })}
-                    className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  />
-                </label>
-                <label className="space-y-1.5">
-                  <span className="text-sm font-medium">Longitude</span>
-                  <input
-                    type="number"
-                    step="0.000001"
-                    min="-180"
-                    max="180"
-                    value={gymSettings.longitude}
-                    onChange={(event) => updateSettings({ longitude: Number(event.target.value) })}
-                    className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    placeholder="Shown only to you"
+                    className="w-full rounded-lg bg-background px-3 py-2 text-sm ring-1 ring-input/70 transition focus:outline-none focus:ring-1 focus:ring-primary/50"
                   />
                 </label>
               </div>
 
-              <div className="rounded-xl border border-border bg-background p-4">
+              <Button type="button" onClick={useCurrentLocation} variant="outline">
+                <Crosshair className="h-4 w-4" />
+                Use current location
+              </Button>
+
+              <div className="rounded-xl bg-background p-4 ring-1 ring-border/70">
                 <div className="mb-4 flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-sm font-medium">Allowed attendance radius</p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-sm font-medium">Attendance Radius</p>
+                    <p className="text-xs text-muted-foreground/75">
                       Clients inside {formatDistance(gymSettings.radiusMeters)} can verify
                       attendance.
                     </p>
@@ -267,20 +260,54 @@ function AttendancePage() {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <Button type="button" onClick={useCurrentLocation} variant="outline">
-                  <Crosshair className="h-4 w-4" />
-                  Use current location
-                </Button>
-                <div className="rounded-lg border border-border bg-muted/45 px-3 py-2 text-sm text-muted-foreground">
-                  {trainerDistance === undefined
-                    ? "Use current location to compare your device position with the saved gym pin."
-                    : `Your device is ${formatDistance(trainerDistance)} from the current gym pin.`}
+              <details className="group rounded-xl bg-background p-4 ring-1 ring-border/70">
+                <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-medium [&::-webkit-details-marker]:hidden">
+                  Advanced
+                  <span className="text-xs text-muted-foreground/75 group-open:hidden">
+                    Lat/Long
+                  </span>
+                </summary>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <label className="space-y-1.5">
+                    <span className="text-xs font-medium text-muted-foreground">Latitude</span>
+                    <input
+                      type="number"
+                      step="0.000001"
+                      min="-90"
+                      max="90"
+                      value={gymSettings.latitude}
+                      onChange={(event) => updateSettings({ latitude: Number(event.target.value) })}
+                      className="w-full rounded-md bg-background px-2.5 py-1.5 text-xs ring-1 ring-input/60 transition focus:outline-none focus:ring-1 focus:ring-primary/50"
+                    />
+                  </label>
+                  <label className="space-y-1.5">
+                    <span className="text-xs font-medium text-muted-foreground">Longitude</span>
+                    <input
+                      type="number"
+                      step="0.000001"
+                      min="-180"
+                      max="180"
+                      value={gymSettings.longitude}
+                      onChange={(event) =>
+                        updateSettings({ longitude: Number(event.target.value) })
+                      }
+                      className="w-full rounded-md bg-background px-2.5 py-1.5 text-xs ring-1 ring-input/60 transition focus:outline-none focus:ring-1 focus:ring-primary/50"
+                    />
+                  </label>
                 </div>
-              </div>
+              </details>
+
+              <p className="text-sm text-muted-foreground/75">
+                {trainerDistance === undefined
+                  ? "Use current location to compare your device position with the saved gym pin."
+                  : `Your device is ${formatDistance(trainerDistance)} from the current gym pin.`}
+              </p>
             </div>
 
-            <MapPreview settings={gymSettings} />
+            <MapPreview
+              settings={gymSettings}
+              onLocationSelect={(coordinates) => updateSettings(coordinates)}
+            />
           </div>
         </section>
 
@@ -350,13 +377,90 @@ function AttendancePage() {
   );
 }
 
-function MapPreview({ settings }: { settings: GymLocationSettings }) {
+const mapZoom = 16;
+const mapTileSize = 256;
+const maxMapLatitude = 85.05112878;
+
+function MapPreview({
+  settings,
+  onLocationSelect,
+}: {
+  settings: GymLocationSettings;
+  onLocationSelect: (coordinates: Pick<GymLocationSettings, "latitude" | "longitude">) => void;
+}) {
+  const isSelectingLocation = useRef(false);
+  const center = useMemo(
+    () => ({
+      tileX: longitudeToTileX(settings.longitude, mapZoom),
+      tileY: latitudeToTileY(settings.latitude, mapZoom),
+    }),
+    [settings.latitude, settings.longitude],
+  );
+  const centerTileX = Math.floor(center.tileX);
+  const centerTileY = Math.floor(center.tileY);
+  const tiles = [-1, 0, 1].flatMap((yOffset) =>
+    [-1, 0, 1].map((xOffset) => ({
+      key: `${centerTileX + xOffset}-${centerTileY + yOffset}`,
+      x: centerTileX + xOffset,
+      y: centerTileY + yOffset,
+    })),
+  );
+
+  const selectLocationFromPointer = (event: PointerEvent<HTMLDivElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const tileX = center.tileX + (event.clientX - rect.left - rect.width / 2) / mapTileSize;
+    const tileY = center.tileY + (event.clientY - rect.top - rect.height / 2) / mapTileSize;
+
+    onLocationSelect({
+      latitude: Number(tileYToLatitude(tileY, mapZoom).toFixed(6)),
+      longitude: Number(tileXToLongitude(tileX, mapZoom).toFixed(6)),
+    });
+  };
+
+  const startSelectingLocation = (event: PointerEvent<HTMLDivElement>) => {
+    isSelectingLocation.current = true;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    selectLocationFromPointer(event);
+  };
+
+  const keepSelectingLocation = (event: PointerEvent<HTMLDivElement>) => {
+    if (!isSelectingLocation.current) return;
+    selectLocationFromPointer(event);
+  };
+
+  const stopSelectingLocation = (event: PointerEvent<HTMLDivElement>) => {
+    isSelectingLocation.current = false;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+
   return (
-    <div className="relative min-h-[320px] overflow-hidden rounded-xl border border-border bg-secondary">
-      <div className="absolute inset-0 bg-grid opacity-70" />
-      <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-accent/15" />
+    <div
+      className="relative min-h-[300px] cursor-crosshair touch-none overflow-hidden rounded-xl bg-muted/35 ring-1 ring-border/60"
+      role="application"
+      aria-label="Mini map. Click or drag to select the gym location."
+      onPointerDown={startSelectingLocation}
+      onPointerMove={keepSelectingLocation}
+      onPointerUp={stopSelectingLocation}
+      onPointerCancel={stopSelectingLocation}
+    >
+      {tiles.map((tile) => (
+        <img
+          key={tile.key}
+          src={`https://tile.openstreetmap.org/${mapZoom}/${tile.x}/${tile.y}.png`}
+          alt=""
+          draggable={false}
+          className="absolute max-w-none select-none opacity-90"
+          style={{
+            height: `${mapTileSize}px`,
+            left: `calc(50% + ${(tile.x - center.tileX) * mapTileSize}px)`,
+            top: `calc(50% + ${(tile.y - center.tileY) * mapTileSize}px)`,
+            width: `${mapTileSize}px`,
+          }}
+        />
+      ))}
+      <div className="absolute inset-0 bg-gradient-to-br from-background/20 via-transparent to-background/25" />
       <div
-        className="absolute left-1/2 top-1/2 rounded-full border border-primary/35 bg-primary/10"
+        className="absolute left-1/2 top-1/2 rounded-full bg-primary/10 ring-1 ring-primary/30"
         style={{
           width: `${Math.min(230, Math.max(90, settings.radiusMeters / 2))}px`,
           height: `${Math.min(230, Math.max(90, settings.radiusMeters / 2))}px`,
@@ -364,26 +468,57 @@ function MapPreview({ settings }: { settings: GymLocationSettings }) {
         }}
       />
       <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center">
-        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-glow">
-          <MapPin className="h-6 w-6" />
+        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/90 text-primary-foreground shadow-soft">
+          <MapPin className="h-5 w-5" />
         </span>
-        <span className="mt-2 rounded-full bg-card/90 px-3 py-1 text-xs font-semibold shadow-soft">
+        <span className="mt-2 rounded-full bg-background/85 px-3 py-1 text-xs font-semibold shadow-soft">
           {settings.name}
         </span>
       </div>
-      <div className="absolute bottom-4 left-4 right-4 rounded-xl border border-border bg-card/90 p-3 text-xs shadow-card backdrop-blur">
+      <div className="absolute bottom-4 left-4 right-4 rounded-lg bg-background/75 p-3 text-xs backdrop-blur">
         <div className="flex items-center justify-between gap-3">
           <span className="font-medium">Attendance perimeter</span>
           <span className="font-semibold text-primary">
             {formatDistance(settings.radiusMeters)}
           </span>
         </div>
-        <p className="mt-1 text-muted-foreground">
+        <p className="mt-1 text-muted-foreground/75">
           {settings.latitude.toFixed(5)}, {settings.longitude.toFixed(5)}
         </p>
       </div>
+      <p className="absolute left-3 top-3 rounded-full bg-background/80 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
+        Click or drag to set pin
+      </p>
+      <a
+        className="absolute bottom-1 right-2 rounded bg-background/70 px-1.5 py-0.5 text-[10px] text-muted-foreground"
+        href="https://www.openstreetmap.org/copyright"
+        target="_blank"
+        rel="noreferrer"
+        onPointerDown={(event) => event.stopPropagation()}
+      >
+        OpenStreetMap
+      </a>
     </div>
   );
+}
+
+function longitudeToTileX(longitude: number, zoom: number) {
+  return ((longitude + 180) / 360) * 2 ** zoom;
+}
+
+function latitudeToTileY(latitude: number, zoom: number) {
+  const clampedLatitude = Math.min(maxMapLatitude, Math.max(-maxMapLatitude, latitude));
+  const radians = (clampedLatitude * Math.PI) / 180;
+  return ((1 - Math.log(Math.tan(radians) + 1 / Math.cos(radians)) / Math.PI) / 2) * 2 ** zoom;
+}
+
+function tileXToLongitude(tileX: number, zoom: number) {
+  return (tileX / 2 ** zoom) * 360 - 180;
+}
+
+function tileYToLatitude(tileY: number, zoom: number) {
+  const radians = Math.atan(Math.sinh(Math.PI * (1 - (2 * tileY) / 2 ** zoom)));
+  return Math.min(maxMapLatitude, Math.max(-maxMapLatitude, (radians * 180) / Math.PI));
 }
 
 function AttendanceHistoryPanel({ entries }: { entries: AttendanceHistoryEntry[] }) {

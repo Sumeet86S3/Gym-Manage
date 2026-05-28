@@ -173,6 +173,46 @@ test("client attendance requires accurate GPS inside the trainer gym radius", as
   assert.equal(Math.round(result.entry.distanceMeters), 0);
 });
 
+test("client self attendance waits for trainer gym setup but trainer marks still sync", async () => {
+  const trainerUserId = randomUUID();
+  const trainerId = randomUUID();
+  const clientUserId = randomUUID();
+  const clientId = randomUUID();
+  const trainerUser = user(trainerUserId, "trainer-pending-location@test.local", "trainer");
+  const clientUser = user(clientUserId, "client-pending-location@test.local", "client");
+  await db.insert(users).values([trainerUser, clientUser]);
+  await db.insert(trainers).values(trainer(trainerId, trainerUserId, false));
+  await db
+    .insert(clients)
+    .values(client(clientId, clientUserId, trainerId, "Pending Location Client"));
+
+  const clientViewBefore = await attendanceService.list(clientUser, "2026-05-30");
+  assert.equal(clientViewBefore.gymSettings.isConfigured, false);
+
+  await assert.rejects(
+    attendanceService.toggle(clientUser, {
+      date: "2026-05-30",
+      location: {
+        latitude: 12.9719,
+        longitude: 77.6412,
+        accuracyMeters: 20,
+      },
+    }),
+    (error) => error.statusCode === 409,
+  );
+
+  const trainerMark = await attendanceService.toggle(trainerUser, {
+    clientId,
+    date: "2026-05-30",
+  });
+  const clientViewAfter = await attendanceService.list(clientUser, "2026-05-30");
+
+  assert.equal(trainerMark.marked, true);
+  assert.equal(trainerMark.entry.method, "Trainer");
+  assert.equal(clientViewAfter.todayEntry.id, trainerMark.entry.id);
+  assert.equal(clientViewAfter.entries.length, 1);
+});
+
 test("client attendance rejects poor GPS accuracy and outside-radius locations", async () => {
   await assert.rejects(
     attendanceService.toggle(clientUserA, {
@@ -211,7 +251,9 @@ test("trainer attendance settings are validated and exposed to trainer and clien
   const clientView = await attendanceService.list(clientUserA, "2026-05-30");
 
   assert.equal(settings.name, "Test Gym");
+  assert.equal(settings.isConfigured, true);
   assert.equal(trainerView.gymSettings.radiusMeters, 180);
+  assert.equal(trainerView.gymSettings.isConfigured, true);
   assert.equal(clientView.gymSettings.latitude, 13.1);
   await assert.rejects(
     attendanceService.updateSettings(trainerUserA, {
@@ -272,13 +314,14 @@ function user(id, email, role) {
   };
 }
 
-function trainer(id, userId) {
+function trainer(id, userId, gymLocationConfigured = true) {
   return {
     id,
     userId,
     specialization: "Strength",
     status: "Approved",
     joinedAt: now.slice(0, 10),
+    gymLocationConfigured,
     createdAt: now,
     updatedAt: now,
   };

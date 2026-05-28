@@ -39,6 +39,10 @@ export async function ensureRuntimeSchema() {
         "attendance_radius_meters",
         "ALTER TABLE trainers ADD attendance_radius_meters integer DEFAULT 100 NOT NULL",
       ],
+      [
+        "gym_location_configured",
+        "ALTER TABLE trainers ADD gym_location_configured integer DEFAULT false NOT NULL",
+      ],
     ];
     for (const [name, statement] of trainerAdds) {
       if (!trainerColumnNames.has(name)) {

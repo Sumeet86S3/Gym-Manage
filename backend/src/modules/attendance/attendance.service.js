@@ -9,10 +9,10 @@ import { clientForUser, trainerForUser } from "../clients/clients.service.js";
 const MAX_GPS_ACCURACY_METERS = 150;
 const MAX_RADIUS_BUFFER_METERS = 50;
 const defaultGymSettings = {
-  name: "FitSphere Elite Studio",
-  address: "Indiranagar Performance Hub",
-  latitude: 12.9719,
-  longitude: 77.6412,
+  name: "",
+  address: "",
+  latitude: 18.457918,
+  longitude: 73.842045,
   radiusMeters: 100,
 };
 
@@ -194,6 +194,7 @@ export async function updateSettings(user, input) {
       gymLatitude: normalized.latitude,
       gymLongitude: normalized.longitude,
       attendanceRadiusMeters: normalized.radiusMeters,
+      gymLocationConfigured: true,
       updatedAt: new Date().toISOString(),
     })
     .where(eq(trainers.id, trainer.id))
@@ -244,13 +245,18 @@ function entryWithClient(entry, client) {
 }
 
 function trainerGymSettings(trainer) {
-  return normalizeGymSettings({
+  const settings = normalizeGymSettings({
     name: trainer?.gymName ?? defaultGymSettings.name,
     address: trainer?.gymAddress ?? defaultGymSettings.address,
     latitude: trainer?.gymLatitude ?? defaultGymSettings.latitude,
     longitude: trainer?.gymLongitude ?? defaultGymSettings.longitude,
     radiusMeters: trainer?.attendanceRadiusMeters ?? defaultGymSettings.radiusMeters,
   });
+
+  return {
+    ...settings,
+    isConfigured: Boolean(trainer?.gymLocationConfigured),
+  };
 }
 
 function normalizeGymSettings(settings) {
@@ -279,6 +285,22 @@ function normalizeGymSettings(settings) {
 }
 
 function validateClientLocation({ user, client, location, gymSettings }) {
+  if (!gymSettings.isConfigured) {
+    logger.warn(
+      {
+        area: "attendance",
+        event: "attendance_location_unconfigured",
+        userId: user.id,
+        clientId: client.id,
+      },
+      "Client attendance rejected because trainer has not configured gym location",
+    );
+    throw new AppError(
+      "Gym location is not set yet. Ask your trainer to mark your attendance today.",
+      409,
+    );
+  }
+
   if (!location) {
     logger.warn(
       {

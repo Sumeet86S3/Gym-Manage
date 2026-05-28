@@ -79,6 +79,7 @@ function ClientWorkouts() {
     | "denied"
     | "permission-denied"
     | "gps-poor"
+    | "setup-required"
   >("idle");
   const attendance = useAttendance();
   const markAttendanceMutation = useMarkAttendance();
@@ -139,14 +140,24 @@ function ClientWorkouts() {
     ? normalizeAttendanceEntry(attendance.data.todayEntry)
     : attendanceEntries.find((entry) => isToday(entry.markedAt));
   const alreadyMarked = Boolean(todayEntry);
+  const gymLocationConfigured = Boolean(gymSettings.isConfigured);
   const clientHistory = attendanceEntries.slice(0, 4);
   const recentMeals = useMemo(
-    () => loadedMeals.map(normalizeMealEntry).sort((a, b) => b.timestamp - a.timestamp).slice(0, 3),
+    () =>
+      loadedMeals
+        .map(normalizeMealEntry)
+        .sort((a, b) => b.timestamp - a.timestamp)
+        .slice(0, 3),
     [loadedMeals],
   );
 
   const markAttendance = async () => {
     if (alreadyMarked) return;
+    if (!gymLocationConfigured) {
+      setAttendanceStatus("setup-required");
+      toast.info("Gym location is not set yet. Ask your trainer to mark attendance today.");
+      return;
+    }
     if (!navigator.geolocation) {
       toast.error("Location access is not available on this device.");
       return;
@@ -218,8 +229,11 @@ function ClientWorkouts() {
                 </div>
                 <h2 className="text-xl font-semibold tracking-tight">Today's check-in</h2>
                 <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-                  Verify from your device location within {formatDistance(gymSettings.radiusMeters)}{" "}
-                  of {gymSettings.name}.
+                  {gymLocationConfigured
+                    ? `Verify from your device location within ${formatDistance(
+                        gymSettings.radiusMeters,
+                      )} of ${gymSettings.name}.`
+                    : "Your trainer needs to set the gym location before client self check-in is available."}
                 </p>
               </div>
               <AttendanceBadge status={alreadyMarked ? "marked" : attendanceStatus} />
@@ -230,13 +244,19 @@ function ClientWorkouts() {
               <div className="grid gap-3 sm:grid-cols-3">
                 <MetricTile
                   label="Gym radius"
-                  value={formatDistance(gymSettings.radiusMeters)}
+                  value={
+                    gymLocationConfigured ? formatDistance(gymSettings.radiusMeters) : "Pending"
+                  }
                   icon={<LocateFixed className="h-4 w-4" />}
                 />
                 <MetricTile
                   label="Your distance"
                   value={
-                    currentDistance === undefined ? "Waiting" : formatDistance(currentDistance)
+                    !gymLocationConfigured
+                      ? "Unavailable"
+                      : currentDistance === undefined
+                        ? "Waiting"
+                        : formatDistance(currentDistance)
                   }
                   icon={<Navigation className="h-4 w-4" />}
                 />
@@ -249,15 +269,18 @@ function ClientWorkouts() {
                         ? "Verified"
                         : attendanceStatus === "verifying"
                           ? "Verifying"
-                          : attendanceStatus === "denied"
-                            ? "Denied"
-                            : attendanceStatus === "gps-poor"
-                              ? "GPS weak"
-                              : attendanceStatus === "permission-denied"
-                                ? "Permission denied"
-                                : attendanceStatus === "detecting" || attendanceStatus === "waiting"
-                                  ? "Detecting"
-                                  : "Ready"
+                          : attendanceStatus === "setup-required" || !gymLocationConfigured
+                            ? "Setup pending"
+                            : attendanceStatus === "denied"
+                              ? "Denied"
+                              : attendanceStatus === "gps-poor"
+                                ? "GPS weak"
+                                : attendanceStatus === "permission-denied"
+                                  ? "Permission denied"
+                                  : attendanceStatus === "detecting" ||
+                                      attendanceStatus === "waiting"
+                                    ? "Detecting"
+                                    : "Ready"
                   }
                   icon={
                     attendanceStatus === "denied" ? (
@@ -274,28 +297,32 @@ function ClientWorkouts() {
                   "rounded-xl border p-4 text-sm",
                   alreadyMarked || attendanceStatus === "verified"
                     ? "border-success/30 bg-success/10 text-success"
-                    : attendanceStatus === "denied"
-                      ? "border-destructive/30 bg-destructive/10 text-destructive"
-                      : "border-border bg-muted/45 text-muted-foreground",
+                    : attendanceStatus === "setup-required" || !gymLocationConfigured
+                      ? "border-warning/30 bg-warning/10 text-warning"
+                      : attendanceStatus === "denied"
+                        ? "border-destructive/30 bg-destructive/10 text-destructive"
+                        : "border-border bg-muted/45 text-muted-foreground",
                 )}
               >
                 {alreadyMarked
                   ? "Today attendance has been marked."
-                  : attendanceStatus === "detecting"
-                    ? "Detecting location..."
-                    : attendanceStatus === "waiting"
-                      ? "Waiting for accurate GPS location. Move outdoors or enable precise location."
-                      : attendanceStatus === "verifying" || markAttendanceMutation.isPending
-                        ? "Verifying attendance with FitSphere."
-                        : attendanceStatus === "gps-poor"
-                          ? "Move outdoors or enable precise location, then try again."
-                          : attendanceStatus === "permission-denied"
-                            ? "GPS permission denied. Enable location access for this site or PWA."
-                            : currentDistance === undefined
-                              ? "Tap Mark Attendance to request location access and calculate your real-time gym distance."
-                              : insideRadius
-                                ? `You are ${formatDistance(currentDistance)} away, inside the approved radius.`
-                                : `You are ${formatDistance(currentDistance)} away, outside the approved radius.`}
+                  : attendanceStatus === "setup-required" || !gymLocationConfigured
+                    ? "Gym location is not set yet. Your trainer can mark attendance for you today."
+                    : attendanceStatus === "detecting"
+                      ? "Detecting location..."
+                      : attendanceStatus === "waiting"
+                        ? "Waiting for accurate GPS location. Move outdoors or enable precise location."
+                        : attendanceStatus === "verifying" || markAttendanceMutation.isPending
+                          ? "Verifying attendance with FitSphere."
+                          : attendanceStatus === "gps-poor"
+                            ? "Move outdoors or enable precise location, then try again."
+                            : attendanceStatus === "permission-denied"
+                              ? "GPS permission denied. Enable location access for this site or PWA."
+                              : currentDistance === undefined
+                                ? "Tap Mark Attendance to request location access and calculate your real-time gym distance."
+                                : insideRadius
+                                  ? `You are ${formatDistance(currentDistance)} away, inside the approved radius.`
+                                  : `You are ${formatDistance(currentDistance)} away, outside the approved radius.`}
               </div>
             </div>
 
@@ -304,8 +331,14 @@ function ClientWorkouts() {
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Gym location
                 </p>
-                <p className="mt-1 font-semibold">{gymSettings.name}</p>
-                <p className="mt-1 text-xs text-muted-foreground">{gymSettings.address}</p>
+                <p className="mt-1 font-semibold">
+                  {gymLocationConfigured ? gymSettings.name : "Setup pending"}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {gymLocationConfigured
+                    ? gymSettings.address
+                    : "Client self check-in unlocks after your trainer saves the gym location."}
+                </p>
               </div>
               {alreadyMarked ? (
                 <div className="mt-4 rounded-lg border border-success/25 bg-success/10 px-3 py-2.5 text-sm font-medium text-success">
@@ -315,6 +348,7 @@ function ClientWorkouts() {
                 <button
                   onClick={markAttendance}
                   disabled={
+                    !gymLocationConfigured ||
                     attendanceStatus === "detecting" ||
                     attendanceStatus === "waiting" ||
                     attendanceStatus === "verifying" ||
@@ -334,7 +368,9 @@ function ClientWorkouts() {
                     ? "Detecting location"
                     : attendanceStatus === "verifying" || markAttendanceMutation.isPending
                       ? "Verifying attendance"
-                      : "Mark Attendance"}
+                      : !gymLocationConfigured
+                        ? "Trainer setup pending"
+                        : "Mark Attendance"}
                 </button>
               )}
             </div>
@@ -528,7 +564,9 @@ function RecentMealsPanel({ meals }: { meals: MealEntry[] }) {
           </span>
           <div>
             <p className="text-sm font-semibold">No meals uploaded yet</p>
-            <p className="text-xs text-muted-foreground">Your recent meal photos will appear here.</p>
+            <p className="text-xs text-muted-foreground">
+              Your recent meal photos will appear here.
+            </p>
           </div>
         </div>
       ) : (
@@ -589,6 +627,7 @@ function AttendanceBadge({
     | "denied"
     | "permission-denied"
     | "gps-poor"
+    | "setup-required"
     | "marked";
 }) {
   const styles = {
@@ -600,6 +639,7 @@ function AttendanceBadge({
     denied: "bg-destructive/15 text-destructive",
     "permission-denied": "bg-destructive/15 text-destructive",
     "gps-poor": "bg-warning/15 text-warning",
+    "setup-required": "bg-warning/15 text-warning",
     marked: "bg-success/15 text-success",
   };
   const label = {
@@ -611,6 +651,7 @@ function AttendanceBadge({
     denied: "Outside radius",
     "permission-denied": "GPS permission denied",
     "gps-poor": "GPS accuracy low",
+    "setup-required": "Setup pending",
     marked: "Marked today",
   };
 

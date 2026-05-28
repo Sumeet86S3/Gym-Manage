@@ -50,6 +50,9 @@ export const trainers = sqliteTable(
     gymLatitude: real("gym_latitude").notNull().default(12.9719),
     gymLongitude: real("gym_longitude").notNull().default(77.6412),
     attendanceRadiusMeters: integer("attendance_radius_meters").notNull().default(100),
+    gymLocationConfigured: integer("gym_location_configured", { mode: "boolean" })
+      .notNull()
+      .default(false),
     ...timestamps,
   },
   (table) => ({

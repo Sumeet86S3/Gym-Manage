@@ -8,6 +8,7 @@ export interface GymLocationSettings {
   longitude: number;
   radiusMeters: number;
   updatedAt: string;
+  isConfigured: boolean;
 }
 
 export interface AttendanceHistoryEntry {
@@ -57,6 +58,7 @@ export const defaultGymSettings: GymLocationSettings = {
   longitude: 77.6412,
   radiusMeters: 100,
   updatedAt: "2026-05-24T08:00:00.000Z",
+  isConfigured: false,
 };
 
 const gymSettingsKey = "fitsphere:gym-location-settings";
@@ -116,6 +118,7 @@ export function normalizeGymSettings(settings?: Partial<GymLocationSettings> | n
     latitude: Number(settings.latitude ?? defaultGymSettings.latitude),
     longitude: Number(settings.longitude ?? defaultGymSettings.longitude),
     radiusMeters: Number(settings.radiusMeters ?? defaultGymSettings.radiusMeters),
+    isConfigured: Boolean(settings.isConfigured),
   };
 }
 
