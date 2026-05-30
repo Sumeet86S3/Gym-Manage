@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Activity, ShieldCheck, UserCheck, Dumbbell, ArrowRight } from "lucide-react";
+import { Activity, ShieldCheck, UserCheck, Dumbbell, ArrowRight, Loader2 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { ThemeToggle } from "@/lib/theme";
 import type { UserRole } from "@/lib/types";
@@ -112,8 +112,9 @@ function LoginPage() {
                   key={r.id}
                   type="button"
                   onClick={() => setRole(r.id)}
+                  disabled={submitting}
                   className={cn(
-                    "group flex flex-col items-center gap-1.5 rounded-xl border p-3 text-center text-xs font-medium transition",
+                    "group flex flex-col items-center gap-1.5 rounded-xl border p-3 text-center text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-60",
                     role === r.id
                       ? "border-primary/60 bg-primary/10 text-primary shadow-glow"
                       : "border-border bg-card/60 text-muted-foreground hover:bg-card",
@@ -125,7 +126,7 @@ function LoginPage() {
               ))}
             </div>
 
-            <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+            <form onSubmit={handleSubmit} className="mt-6 space-y-4" aria-busy={submitting}>
               <Field label="Email">
                 <input
                   type="email"
@@ -133,7 +134,8 @@ function LoginPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder={roles.find((r) => r.id === role)!.placeholder}
                   required
-                  className="mt-1.5 w-full rounded-xl border border-input bg-background/60 px-3.5 py-2.5 text-sm shadow-soft outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30"
+                  disabled={submitting}
+                  className="mt-1.5 w-full rounded-xl border border-input bg-background/60 px-3.5 py-2.5 text-sm shadow-soft outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-70"
                 />
               </Field>
               <Field
@@ -141,7 +143,8 @@ function LoginPage() {
                 right={
                   <button
                     type="button"
-                    className="text-xs font-medium text-primary hover:underline"
+                    disabled={submitting}
+                    className="text-xs font-medium text-primary hover:underline disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     Forgot?
                   </button>
@@ -153,8 +156,9 @@ function LoginPage() {
                   placeholder="••••••••"
                   autoComplete="current-password"
                   required
+                  disabled={submitting}
                   className="mt-1.5"
-                  inputClassName="w-full rounded-xl border border-input bg-background/60 px-3.5 py-2.5 text-sm shadow-soft outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30"
+                  inputClassName="w-full rounded-xl border border-input bg-background/60 px-3.5 py-2.5 text-sm shadow-soft outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-70"
                 />
               </Field>
               <label className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -162,6 +166,7 @@ function LoginPage() {
                   type="checkbox"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
+                  disabled={submitting}
                   className="h-4 w-4 rounded border-input accent-primary"
                 />
                 Remember me on this device
@@ -169,13 +174,25 @@ function LoginPage() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="btn-glow group flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground"
+                className="btn-glow group flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground disabled:cursor-wait disabled:opacity-90"
               >
-                {submitting
-                  ? "Signing in..."
-                  : `Sign in as ${roles.find((r) => r.id === role)!.label}`}
-                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                {submitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    Signing in...
+                  </>
+                ) : (
+                  <>
+                    {`Sign in as ${roles.find((r) => r.id === role)!.label}`}
+                    <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                  </>
+                )}
               </button>
+              {submitting && (
+                <p className="text-center text-xs text-muted-foreground" role="status">
+                  Verifying credentials and preparing your dashboard...
+                </p>
+              )}
             </form>
             {error && (
               <p className="mt-3 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
