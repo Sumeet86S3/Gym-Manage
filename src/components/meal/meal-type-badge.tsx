@@ -1,4 +1,4 @@
-import { Coffee, Salad, Soup, Cookie, Dumbbell, Droplets } from "lucide-react";
+import { Coffee, Salad, Soup, Cookie, Dumbbell, Droplets, UtensilsCrossed } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { MealType } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -41,8 +41,14 @@ const config: Record<MealType, { icon: LucideIcon; cls: string; dot: string }> =
   },
 };
 
-export function MealTypeBadge({ type, size = "sm" }: { type: MealType; size?: "sm" | "md" }) {
-  const { icon: Icon, cls } = config[type];
+const fallbackConfig = {
+  icon: UtensilsCrossed,
+  cls: "bg-muted text-muted-foreground border-border",
+  dot: "bg-muted-foreground",
+};
+
+export function MealTypeBadge({ type, size = "sm" }: { type: string; size?: "sm" | "md" }) {
+  const { icon: Icon, cls } = config[type as MealType] ?? fallbackConfig;
   return (
     <span
       className={cn(
@@ -57,5 +63,5 @@ export function MealTypeBadge({ type, size = "sm" }: { type: MealType; size?: "s
   );
 }
 
-export const mealTypeIcon = (t: MealType) => config[t].icon;
-export const mealTypeDot = (t: MealType) => config[t].dot;
+export const mealTypeIcon = (t: string) => (config[t as MealType] ?? fallbackConfig).icon;
+export const mealTypeDot = (t: string) => (config[t as MealType] ?? fallbackConfig).dot;
