@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { Search, Clock, Filter, UtensilsCrossed } from "lucide-react";
+import { Clock, Filter, UtensilsCrossed } from "lucide-react";
 import { PageHeader } from "@/components/app-shell";
 import { MealTypeBadge } from "@/components/meal/meal-type-badge";
-import type { MealEntry, MealType } from "@/lib/types";
+import type { Client, MealEntry, MealType } from "@/lib/types";
 import {
   Select,
   SelectContent,
@@ -24,8 +24,11 @@ type TypeFilter = MealType | "all";
 function TrainerMealsPage() {
   const [type, setType] = useState<TypeFilter>("all");
   const [range, setRange] = useState<RangeFilter>("today");
-  const [search, setSearch] = useState("");
-  const query = `/meals?type=${type}&range=${range}&search=${encodeURIComponent(search)}`;
+  const [selectedClientId, setSelectedClientId] = useState("all");
+  const query = `/meals?type=${type}&range=${range}${
+    selectedClientId !== "all" ? `&clientId=${selectedClientId}` : ""
+  }`;
+  const { data: clients, loading: clientsLoading } = useApiResource<Client[]>("/clients", []);
   const { data: meals } = useApiResource<
     Array<MealEntry & { imageUrl?: string; loggedAt?: string }>
   >(query, []);
@@ -46,10 +49,6 @@ function TrainerMealsPage() {
     [meals],
   );
 
-  const clients = useMemo(
-    () => Array.from(new Set(normalized.map((m) => m.clientName))),
-    [normalized],
-  );
   const typeChips: TypeFilter[] = [
     "all",
     "Warm water",
@@ -104,21 +103,23 @@ function TrainerMealsPage() {
             ))}
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search client..."
-                list="meal-clients"
-                className="h-10 w-full rounded-xl border border-input bg-background pl-9 pr-3 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 sm:w-56"
-              />
-              <datalist id="meal-clients">
-                {clients.map((c) => (
-                  <option key={c} value={c} />
+            <Select
+              value={selectedClientId}
+              onValueChange={setSelectedClientId}
+              disabled={clientsLoading}
+            >
+              <SelectTrigger className="h-10 w-full rounded-xl sm:w-56">
+                <SelectValue placeholder="Select client" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All clients</SelectItem>
+                {clients.map((client) => (
+                  <SelectItem key={client.id} value={client.id}>
+                    {client.name}
+                  </SelectItem>
                 ))}
-              </datalist>
-            </div>
+              </SelectContent>
+            </Select>
             <Select value={range} onValueChange={(v) => setRange(v as RangeFilter)}>
               <SelectTrigger className="h-10 w-full rounded-xl sm:w-40">
                 <SelectValue />

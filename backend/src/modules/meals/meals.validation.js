@@ -15,6 +15,7 @@ export const listMealsSchema = z.object({
     type: z.enum([...mealTypes, "all"]).optional(),
     range: z.enum(["today", "week", "all"]).optional(),
     search: z.string().optional(),
+    clientId: z.string().uuid().optional(),
   }),
 });
 

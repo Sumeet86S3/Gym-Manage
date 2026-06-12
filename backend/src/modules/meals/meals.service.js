@@ -10,6 +10,7 @@ const DAY_MS = 1000 * 60 * 60 * 24;
 export async function list(user, query = {}) {
   const where = [isNull(mealLogs.deletedAt)];
   if (query.type && query.type !== "all") where.push(eq(mealLogs.type, query.type));
+  if (query.clientId) where.push(eq(mealLogs.clientId, query.clientId));
   if (query.range && query.range !== "all") {
     const days = query.range === "week" ? 7 : 1;
     where.push(gte(mealLogs.loggedAt, new Date(Date.now() - DAY_MS * days).toISOString()));
