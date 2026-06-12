@@ -5,15 +5,12 @@ import { clients, mealLogs } from "../../db/schema.js";
 import { uploadMealImage } from "../../services/imagekit.service.js";
 import { clientForUser, trainerForUser } from "../clients/clients.service.js";
 
-const DAY_MS = 1000 * 60 * 60 * 24;
-
 export async function list(user, query = {}) {
   const where = [isNull(mealLogs.deletedAt)];
   if (query.type && query.type !== "all") where.push(eq(mealLogs.type, query.type));
   if (query.clientId) where.push(eq(mealLogs.clientId, query.clientId));
   if (query.range && query.range !== "all") {
-    const days = query.range === "week" ? 7 : 1;
-    where.push(gte(mealLogs.loggedAt, new Date(Date.now() - DAY_MS * days).toISOString()));
+    where.push(gte(mealLogs.loggedAt, rangeStart(query.range).toISOString()));
   }
 
   let rows = await db
@@ -77,4 +74,11 @@ export async function create(user, input) {
     })
     .returning();
   return meal;
+}
+
+function rangeStart(range) {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  if (range === "week") date.setDate(date.getDate() - 6);
+  return date;
 }

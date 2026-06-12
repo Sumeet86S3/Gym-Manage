@@ -25,9 +25,11 @@ function TrainerMealsPage() {
   const [type, setType] = useState<TypeFilter>("all");
   const [range, setRange] = useState<RangeFilter>("today");
   const [selectedClientId, setSelectedClientId] = useState("all");
-  const query = `/meals?type=${type}&range=${range}${
-    selectedClientId !== "all" ? `&clientId=${selectedClientId}` : ""
-  }`;
+  const query = useMemo(() => {
+    const params = new URLSearchParams({ type, range });
+    if (selectedClientId !== "all") params.set("clientId", selectedClientId);
+    return `/meals?${params.toString()}`;
+  }, [range, selectedClientId, type]);
   const { data: clients, loading: clientsLoading } = useApiResource<Client[]>("/clients", []);
   const { data: meals } = useApiResource<
     Array<MealEntry & { imageUrl?: string; loggedAt?: string }>
