@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNull, like } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, like, lte } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { db } from "../../config/db.js";
 import { clients, mealLogs } from "../../db/schema.js";
@@ -9,7 +9,13 @@ export async function list(user, query = {}) {
   const where = [isNull(mealLogs.deletedAt)];
   if (query.type && query.type !== "all") where.push(eq(mealLogs.type, query.type));
   if (query.clientId) where.push(eq(mealLogs.clientId, query.clientId));
-  if (query.range && query.range !== "all") {
+  if (query.startDate) {
+    where.push(gte(mealLogs.loggedAt, dayStart(query.startDate).toISOString()));
+  }
+  if (query.endDate) {
+    where.push(lte(mealLogs.loggedAt, dayEnd(query.endDate).toISOString()));
+  }
+  if (!query.startDate && !query.endDate && query.range && query.range !== "all") {
     where.push(gte(mealLogs.loggedAt, rangeStart(query.range).toISOString()));
   }
   if (query.search) where.push(like(clients.name, `%${query.search}%`));
@@ -84,4 +90,21 @@ function rangeStart(range) {
   date.setHours(0, 0, 0, 0);
   if (range === "week") date.setDate(date.getDate() - 6);
   return date;
+}
+
+function dayStart(value) {
+  const date = parseDateInput(value);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function dayEnd(value) {
+  const date = parseDateInput(value);
+  date.setHours(23, 59, 59, 999);
+  return date;
+}
+
+function parseDateInput(value) {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, month - 1, day);
 }

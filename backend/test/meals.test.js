@@ -84,6 +84,17 @@ test("trainer meal client and type filters combine with duration", async () => {
   assert.equal(rows[0].type, "Dinner");
 });
 
+test("trainer meal custom date filters include full selected days", async () => {
+  const rows = await mealsService.list(trainerUser, {
+    startDate: dateInput(daysAgo(6)),
+    endDate: dateInput(daysAgo(2)),
+    range: "custom",
+    type: "all",
+  });
+
+  assert.deepEqual(rows.map((row) => row.type), ["Dinner", "Lunch"]);
+});
+
 test("trainer meal pagination returns stable pages and next page state", async () => {
   const firstPage = await mealsService.list(trainerUser, {
     range: "all",
@@ -176,4 +187,8 @@ function daysAgo(days) {
   date.setDate(date.getDate() - days);
   date.setHours(12, 0, 0, 0);
   return date;
+}
+
+function dateInput(date) {
+  return date.toISOString().slice(0, 10);
 }

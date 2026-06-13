@@ -1,7 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { AlertCircle, Clock, Filter, LoaderCircle, RefreshCw, UtensilsCrossed } from "lucide-react";
+import {
+  AlertCircle,
+  CalendarDays,
+  Clock,
+  Filter,
+  LoaderCircle,
+  RefreshCw,
+  UtensilsCrossed,
+} from "lucide-react";
 import { PageHeader } from "@/components/app-shell";
 import { MealTypeBadge } from "@/components/meal/meal-type-badge";
 import type { Client, MealEntry, MealType } from "@/lib/types";
@@ -14,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useApiResource } from "@/hooks/use-api-resource";
 import { api } from "@/lib/api";
@@ -22,7 +31,7 @@ export const Route = createFileRoute("/trainer/meals")({
   component: TrainerMealsPage,
 });
 
-type RangeFilter = "today" | "week" | "all";
+type RangeFilter = "today" | "week" | "all" | "custom";
 type TypeFilter = MealType | "all";
 type ApiMealEntry = MealEntry & { imageUrl?: string; loggedAt?: string };
 type MealPage = {
@@ -37,13 +46,19 @@ const MEAL_PAGE_SIZE = 12;
 function TrainerMealsPage() {
   const [type, setType] = useState<TypeFilter>("all");
   const [range, setRange] = useState<RangeFilter>("today");
+  const [customStartDate, setCustomStartDate] = useState(todayInputValue);
+  const [customEndDate, setCustomEndDate] = useState(todayInputValue);
   const [selectedClientId, setSelectedClientId] = useState("all");
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const queryParams = useMemo(() => {
     const params = new URLSearchParams({ type, range });
     if (selectedClientId !== "all") params.set("clientId", selectedClientId);
+    if (range === "custom") {
+      if (customStartDate) params.set("startDate", customStartDate);
+      if (customEndDate) params.set("endDate", customEndDate);
+    }
     return params;
-  }, [range, selectedClientId, type]);
+  }, [customEndDate, customStartDate, range, selectedClientId, type]);
   const { data: clients, loading: clientsLoading } = useApiResource<Client[]>("/clients", []);
   const {
     data,
@@ -150,7 +165,7 @@ function TrainerMealsPage() {
               </button>
             ))}
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
             <Select
               value={selectedClientId}
               onValueChange={setSelectedClientId}
@@ -175,9 +190,36 @@ function TrainerMealsPage() {
               <SelectContent>
                 <SelectItem value="today">Today</SelectItem>
                 <SelectItem value="week">This week</SelectItem>
+                <SelectItem value="custom">Custom range</SelectItem>
                 <SelectItem value="all">All time</SelectItem>
               </SelectContent>
             </Select>
+            {range === "custom" ? (
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <div className="relative">
+                  <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    aria-label="Start date"
+                    type="date"
+                    value={customStartDate}
+                    max={customEndDate || undefined}
+                    onChange={(event) => setCustomStartDate(event.target.value)}
+                    className="h-10 rounded-xl pl-9 sm:w-40"
+                  />
+                </div>
+                <div className="relative">
+                  <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    aria-label="End date"
+                    type="date"
+                    value={customEndDate}
+                    min={customStartDate || undefined}
+                    onChange={(event) => setCustomEndDate(event.target.value)}
+                    className="h-10 rounded-xl pl-9 sm:w-40"
+                  />
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
@@ -324,4 +366,8 @@ function FeedCard({ meal }: { meal: MealEntry }) {
       {meal.note && <p className="px-4 py-3 text-sm text-foreground">{meal.note}</p>}
     </article>
   );
+}
+
+function todayInputValue() {
+  return new Date().toISOString().slice(0, 10);
 }
