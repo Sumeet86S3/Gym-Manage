@@ -16,6 +16,8 @@ export const listMealsSchema = z.object({
     range: z.enum(["today", "week", "all"]).optional(),
     search: z.string().optional(),
     clientId: z.string().uuid().optional(),
+    limit: z.coerce.number().int().min(1).max(40).optional(),
+    page: z.coerce.number().int().min(1).optional(),
   }),
 });
 

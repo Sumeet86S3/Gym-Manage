@@ -84,6 +84,31 @@ test("trainer meal client and type filters combine with duration", async () => {
   assert.equal(rows[0].type, "Dinner");
 });
 
+test("trainer meal pagination returns stable pages and next page state", async () => {
+  const firstPage = await mealsService.list(trainerUser, {
+    range: "all",
+    type: "all",
+    limit: 2,
+    page: 1,
+  });
+  const secondPage = await mealsService.list(trainerUser, {
+    range: "all",
+    type: "all",
+    limit: 2,
+    page: 2,
+  });
+
+  assert.equal(firstPage.items.length, 2);
+  assert.equal(firstPage.hasMore, true);
+  assert.equal(firstPage.nextPage, 2);
+  assert.deepEqual(firstPage.items.map((row) => row.type), ["Breakfast", "Dinner"]);
+
+  assert.equal(secondPage.items.length, 2);
+  assert.equal(secondPage.hasMore, false);
+  assert.equal(secondPage.nextPage, null);
+  assert.deepEqual(secondPage.items.map((row) => row.type), ["Lunch", "Evening Snack"]);
+});
+
 function user(id, email, role) {
   return {
     id,

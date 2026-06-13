@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNull } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, like } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { db } from "../../config/db.js";
 import { clients, mealLogs } from "../../db/schema.js";
@@ -12,8 +12,19 @@ export async function list(user, query = {}) {
   if (query.range && query.range !== "all") {
     where.push(gte(mealLogs.loggedAt, rangeStart(query.range).toISOString()));
   }
+  if (query.search) where.push(like(clients.name, `%${query.search}%`));
 
-  let rows = await db
+  if (user.role === "client") {
+    const client = await clientForUser(user);
+    where.push(eq(mealLogs.clientId, client.id));
+  }
+
+  if (user.role === "trainer") {
+    const trainer = await trainerForUser(user);
+    where.push(eq(clients.trainerId, trainer.id));
+  }
+
+  const statement = db
     .select({
       id: mealLogs.id,
       clientId: mealLogs.clientId,
@@ -27,30 +38,22 @@ export async function list(user, query = {}) {
     .from(mealLogs)
     .innerJoin(clients, eq(mealLogs.clientId, clients.id))
     .where(and(...where))
-    .orderBy(desc(mealLogs.loggedAt));
+    .orderBy(desc(mealLogs.loggedAt), desc(mealLogs.id));
 
-  if (user.role === "client") {
-    const client = await clientForUser(user);
-    rows = rows.filter((row) => row.clientId === client.id);
-  }
+  if (!query.limit) return statement;
 
-  if (user.role === "trainer") {
-    const trainer = await trainerForUser(user);
-    rows = rows.filter((row) => {
-      const client = rows.find((candidate) => candidate.clientId === row.clientId);
-      return client && true;
-    });
-    const trainerClients = await db
-      .select({ id: clients.id })
-      .from(clients)
-      .where(eq(clients.trainerId, trainer.id));
-    const allowed = new Set(trainerClients.map((client) => client.id));
-    rows = rows.filter((row) => allowed.has(row.clientId));
-  }
+  const page = query.page ?? 1;
+  const limit = query.limit;
+  const rows = await statement.limit(limit + 1).offset((page - 1) * limit);
+  const hasMore = rows.length > limit;
+  const items = hasMore ? rows.slice(0, limit) : rows;
 
-  if (query.search)
-    rows = rows.filter((row) => row.clientName.toLowerCase().includes(query.search.toLowerCase()));
-  return rows;
+  return {
+    items,
+    page,
+    nextPage: hasMore ? page + 1 : null,
+    hasMore,
+  };
 }
 
 export async function create(user, input) {

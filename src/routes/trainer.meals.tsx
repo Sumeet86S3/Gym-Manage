@@ -1,9 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
-import { Clock, Filter, UtensilsCrossed } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useInfiniteQuery } from "@tanstack/react-query";
+import { AlertCircle, Clock, Filter, LoaderCircle, RefreshCw, UtensilsCrossed } from "lucide-react";
 import { PageHeader } from "@/components/app-shell";
 import { MealTypeBadge } from "@/components/meal/meal-type-badge";
 import type { Client, MealEntry, MealType } from "@/lib/types";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -13,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useApiResource } from "@/hooks/use-api-resource";
+import { api } from "@/lib/api";
 
 export const Route = createFileRoute("/trainer/meals")({
   component: TrainerMealsPage,
@@ -20,24 +24,66 @@ export const Route = createFileRoute("/trainer/meals")({
 
 type RangeFilter = "today" | "week" | "all";
 type TypeFilter = MealType | "all";
+type ApiMealEntry = MealEntry & { imageUrl?: string; loggedAt?: string };
+type MealPage = {
+  items: ApiMealEntry[];
+  page: number;
+  nextPage: number | null;
+  hasMore: boolean;
+};
+
+const MEAL_PAGE_SIZE = 12;
 
 function TrainerMealsPage() {
   const [type, setType] = useState<TypeFilter>("all");
   const [range, setRange] = useState<RangeFilter>("today");
   const [selectedClientId, setSelectedClientId] = useState("all");
-  const query = useMemo(() => {
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+  const queryParams = useMemo(() => {
     const params = new URLSearchParams({ type, range });
     if (selectedClientId !== "all") params.set("clientId", selectedClientId);
-    return `/meals?${params.toString()}`;
+    return params;
   }, [range, selectedClientId, type]);
   const { data: clients, loading: clientsLoading } = useApiResource<Client[]>("/clients", []);
-  const { data: meals } = useApiResource<
-    Array<MealEntry & { imageUrl?: string; loggedAt?: string }>
-  >(query, []);
+  const {
+    data,
+    error,
+    fetchNextPage,
+    hasNextPage,
+    isError,
+    isFetchingNextPage,
+    isLoading,
+    refetch,
+  } = useInfiniteQuery({
+    queryKey: ["api", "/meals", queryParams.toString(), MEAL_PAGE_SIZE],
+    initialPageParam: 1,
+    queryFn: ({ pageParam, signal }) => {
+      const params = new URLSearchParams(queryParams);
+      params.set("limit", String(MEAL_PAGE_SIZE));
+      params.set("page", String(pageParam));
+      return api<MealPage>(`/meals?${params.toString()}`, { signal });
+    },
+    getNextPageParam: (lastPage) => lastPage.nextPage ?? undefined,
+  });
+
+  useEffect(() => {
+    const target = loadMoreRef.current;
+    if (!target || !hasNextPage || isFetchingNextPage) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) fetchNextPage();
+      },
+      { rootMargin: "360px" },
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
   const normalized = useMemo(
     () =>
-      meals.map((meal) => ({
+      (data?.pages.flatMap((page) => page.items) ?? []).map((meal) => ({
         ...meal,
         image: meal.image ?? meal.imageUrl ?? "",
         timestamp:
@@ -48,7 +94,7 @@ function TrainerMealsPage() {
             ? new Date(meal.loggedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
             : "Now"),
       })),
-    [meals],
+    [data],
   );
 
   const typeChips: TypeFilter[] = [
@@ -136,7 +182,11 @@ function TrainerMealsPage() {
         </div>
       </div>
 
-      {normalized.length === 0 ? (
+      {isLoading ? (
+        <MealFeedSkeleton />
+      ) : isError ? (
+        <MealFeedError error={error} onRetry={() => refetch()} />
+      ) : normalized.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/30 px-6 py-16 text-center">
           <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
             <UtensilsCrossed className="h-7 w-7" />
@@ -153,6 +203,23 @@ function TrainerMealsPage() {
           ))}
         </div>
       )}
+
+      {!isLoading && !isError && normalized.length > 0 ? (
+        <div ref={loadMoreRef} className="flex min-h-16 items-center justify-center">
+          {isFetchingNextPage ? (
+            <p className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+              <LoaderCircle className="h-4 w-4 animate-spin" />
+              Loading more meals...
+            </p>
+          ) : hasNextPage ? (
+            <Button variant="outline" onClick={() => fetchNextPage()}>
+              Load more
+            </Button>
+          ) : (
+            <p className="text-sm text-muted-foreground">You have reached the end.</p>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -177,6 +244,50 @@ function MiniStat({
       >
         {value}
       </p>
+    </div>
+  );
+}
+
+function MealFeedSkeleton() {
+  return (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      {Array.from({ length: 8 }).map((_, index) => (
+        <article
+          key={index}
+          className="flex flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-card"
+        >
+          <div className="flex items-center gap-3 p-3.5">
+            <Skeleton className="h-10 w-10 rounded-full" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <Skeleton className="h-4 w-28" />
+              <Skeleton className="h-3 w-20" />
+            </div>
+            <Skeleton className="h-6 w-20 rounded-full" />
+          </div>
+          <Skeleton className="aspect-[4/3] w-full rounded-none" />
+          <div className="space-y-2 p-4">
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-2/3" />
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function MealFeedError({ error, onRetry }: { error: unknown; onRetry: () => void }) {
+  const message = error instanceof Error ? error.message : "Unable to load meal updates.";
+  return (
+    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-destructive/30 bg-destructive/5 px-6 py-16 text-center">
+      <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
+        <AlertCircle className="h-7 w-7" />
+      </span>
+      <h3 className="mt-4 text-base font-semibold text-foreground">Meal updates did not load</h3>
+      <p className="mt-1 max-w-sm text-sm text-muted-foreground">{message}</p>
+      <Button className="mt-4" variant="outline" onClick={onRetry}>
+        <RefreshCw className="h-4 w-4" />
+        Retry
+      </Button>
     </div>
   );
 }
