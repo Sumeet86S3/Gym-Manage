@@ -22,7 +22,7 @@ const roles: { id: UserRole; label: string; icon: typeof ShieldCheck; placeholde
 function LoginPage() {
   const { user, loading, login } = useAuth();
   const navigate = useNavigate();
-  const [role, setRole] = useState<UserRole>("trainer");
+  const [role, setRole] = useState<UserRole>("client");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);

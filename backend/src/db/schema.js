@@ -146,6 +146,7 @@ export const mealLogs = sqliteTable(
     }).notNull(),
     note: text("note"),
     imageUrl: text("image_url").notNull(),
+    imagekitFileId: text("imagekit_file_id"),
     loggedAt: text("logged_at").notNull(),
     ...timestamps,
   },

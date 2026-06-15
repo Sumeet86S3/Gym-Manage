@@ -45,8 +45,8 @@ await db
 await db
   .insert(mealLogs)
   .values([
-    meal(ids.clientToday, "Breakfast", atLocalTime(10)),
-    meal(ids.clientToday, "Dinner", daysAgo(2)),
+    meal(ids.clientToday, "Breakfast", atLocalTime(10), "imagekit-breakfast"),
+    meal(ids.clientToday, "Dinner", daysAgo(2), "imagekit-dinner"),
     meal(ids.clientWeek, "Lunch", daysAgo(6)),
     meal(ids.clientWeek, "Evening Snack", daysAgo(8)),
     meal(ids.clientOtherTrainer, "Lunch", atLocalTime(11)),
@@ -148,11 +148,26 @@ test("trainer meal pagination returns stable pages and next page state", async (
 });
 
 test("trainer can clear selected client meal updates and missed meals through today", async () => {
-  const result = await mealsService.clearForClient(trainerUser, { clientId: ids.clientToday });
+  const originalFetch = globalThis.fetch;
+  const deletedImagekitFileIds = [];
+  globalThis.fetch = async (url, options) => {
+    deletedImagekitFileIds.push(String(url).split("/").pop());
+    assert.equal(options.method, "DELETE");
+    return new Response(null, { status: 204 });
+  };
+
+  let result;
+  try {
+    result = await mealsService.clearForClient(trainerUser, { clientId: ids.clientToday });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 
   assert.equal(result.clientId, ids.clientToday);
   assert.equal(result.deletedMealUpdates, 2);
+  assert.equal(result.deletedImagekitFiles, 2);
   assert.equal(result.clearedThrough, dateInput(now));
+  assert.deepEqual(deletedImagekitFileIds.sort(), ["imagekit-breakfast", "imagekit-dinner"]);
 
   const rows = await mealsService.list(trainerUser, { range: "all", type: "all" });
   assert.deepEqual(rows.map((row) => row.clientId).sort(), [ids.clientWeek, ids.clientWeek]);
@@ -223,12 +238,13 @@ function client(id, trainerId, name, joinedAt = now.toISOString().slice(0, 10)) 
   };
 }
 
-function meal(clientId, type, loggedAt) {
+function meal(clientId, type, loggedAt, imagekitFileId = null) {
   return {
     id: randomUUID(),
     clientId,
     type,
     imageUrl: "https://example.com/meal.jpg",
+    imagekitFileId,
     loggedAt: loggedAt.toISOString(),
     createdAt: loggedAt.toISOString(),
     updatedAt: loggedAt.toISOString(),

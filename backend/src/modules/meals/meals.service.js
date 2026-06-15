@@ -2,7 +2,7 @@ import { and, desc, eq, gte, inArray, isNull, like, lt, lte } from "drizzle-orm"
 import { randomUUID } from "node:crypto";
 import { db } from "../../config/db.js";
 import { clients, mealClearances, mealLogs } from "../../db/schema.js";
-import { uploadMealImage } from "../../services/imagekit.service.js";
+import { deleteMealImage, uploadMealImage } from "../../services/imagekit.service.js";
 import { AppError } from "../../utils/AppError.js";
 import { clientForUser, trainerForUser } from "../clients/clients.service.js";
 
@@ -47,6 +47,7 @@ export async function list(user, query = {}) {
       type: mealLogs.type,
       note: mealLogs.note,
       imageUrl: mealLogs.imageUrl,
+      imagekitFileId: mealLogs.imagekitFileId,
       loggedAt: mealLogs.loggedAt,
       createdAt: mealLogs.createdAt,
     })
@@ -86,6 +87,7 @@ export async function create(user, input) {
       type: input.type,
       note: input.note,
       imageUrl: image.url,
+      imagekitFileId: image.fileId,
       loggedAt: input.loggedAt ?? now,
       createdAt: now,
       updatedAt: now,
@@ -117,15 +119,32 @@ export async function clearForClient(user, input) {
 
   const now = new Date();
   const clearedThrough = dateKey(now);
-  const deletedRows = await db
+  const rowsToDelete = await db
+    .select({
+      id: mealLogs.id,
+      imagekitFileId: mealLogs.imagekitFileId,
+    })
+    .from(mealLogs)
+    .where(
+      and(
+        eq(mealLogs.clientId, client.id),
+        lte(mealLogs.loggedAt, dayEnd(clearedThrough).toISOString()),
+      ),
+    );
+
+  let deletedImagekitFiles = 0;
+  for (const meal of rowsToDelete) {
+    if (await deleteMealImage(meal.imagekitFileId)) deletedImagekitFiles += 1;
+  }
+
+  await db
     .delete(mealLogs)
     .where(
       and(
         eq(mealLogs.clientId, client.id),
         lte(mealLogs.loggedAt, dayEnd(clearedThrough).toISOString()),
       ),
-    )
-    .returning({ id: mealLogs.id });
+    );
 
   await db
     .insert(mealClearances)
@@ -148,7 +167,8 @@ export async function clearForClient(user, input) {
     clientId: client.id,
     clientName: client.name,
     clearedThrough,
-    deletedMealUpdates: deletedRows.length,
+    deletedMealUpdates: rowsToDelete.length,
+    deletedImagekitFiles,
   };
 }
 

@@ -146,6 +146,7 @@ function TrainerMealsPage() {
       const result = await api<{
         clientName: string;
         deletedMealUpdates: number;
+        deletedImagekitFiles: number;
       }>("/meals/clear", {
         method: "DELETE",
         body: JSON.stringify({ clientId: selectedClient.id }),
@@ -157,6 +158,8 @@ function TrainerMealsPage() {
       toast.success("Meal history cleared.", {
         description: `${result.deletedMealUpdates} meal update${
           result.deletedMealUpdates === 1 ? "" : "s"
+        } and ${result.deletedImagekitFiles} image${
+          result.deletedImagekitFiles === 1 ? "" : "s"
         } removed for ${result.clientName}.`,
       });
       setClearDialogOpen(false);

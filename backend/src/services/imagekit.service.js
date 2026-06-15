@@ -3,6 +3,7 @@ import { env } from "../config/env.js";
 import { AppError } from "../utils/AppError.js";
 
 const IMAGEKIT_UPLOAD_URL = "https://upload.imagekit.io/api/v1/files/upload";
+const IMAGEKIT_FILE_URL = "https://api.imagekit.io/v1/files";
 
 export async function uploadMealImage({ imageData, fileName }) {
   const formData = new FormData();
@@ -33,4 +34,26 @@ export async function uploadMealImage({ imageData, fileName }) {
     url: payload.url,
     fileId: payload.fileId,
   };
+}
+
+export async function deleteMealImage(fileId) {
+  if (!fileId) return false;
+
+  const response = await fetch(`${IMAGEKIT_FILE_URL}/${encodeURIComponent(fileId)}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${env.IMAGEKIT_PRIVATE_KEY}:`).toString("base64")}`,
+    },
+  });
+
+  if (response.status === 404) return false;
+  if (response.ok) return true;
+
+  const payload = await response.json().catch(() => null);
+  throw new AppError("Unable to delete meal image", 502, {
+    provider: "imagekit",
+    status: response.status,
+    message: payload?.message,
+    fileId,
+  });
 }
