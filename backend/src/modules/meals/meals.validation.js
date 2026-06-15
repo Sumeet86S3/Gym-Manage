@@ -11,26 +11,15 @@ const mealTypes = [
 ];
 
 export const listMealsSchema = z.object({
-  query: z
-    .object({
-      type: z.enum([...mealTypes, "all"]).optional(),
-      range: z.enum(["today", "week", "all", "custom"]).optional(),
-      startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-      endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-      search: z.string().optional(),
-      clientId: z.string().uuid().optional(),
-      limit: z.coerce.number().int().min(1).max(40).optional(),
-      page: z.coerce.number().int().min(1).optional(),
-    })
-    .superRefine((query, ctx) => {
-      if (query.startDate && query.endDate && query.startDate > query.endDate) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "startDate must be before or equal to endDate",
-          path: ["startDate"],
-        });
-      }
-    }),
+  query: z.object({
+    type: z.enum([...mealTypes, "all"]).optional(),
+    range: z.enum(["today", "week", "date", "all"]).optional(),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    search: z.string().optional(),
+    clientId: z.string().uuid().optional(),
+    limit: z.coerce.number().int().min(1).max(40).optional(),
+    page: z.coerce.number().int().min(1).optional(),
+  }),
 });
 
 export const createMealSchema = z.object({

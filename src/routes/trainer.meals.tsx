@@ -31,7 +31,7 @@ export const Route = createFileRoute("/trainer/meals")({
   component: TrainerMealsPage,
 });
 
-type RangeFilter = "today" | "week" | "all" | "custom";
+type RangeFilter = "today" | "week" | "date" | "all";
 type TypeFilter = MealType | "all";
 type ApiMealEntry = MealEntry & { imageUrl?: string; loggedAt?: string };
 type MealPage = {
@@ -46,19 +46,15 @@ const MEAL_PAGE_SIZE = 12;
 function TrainerMealsPage() {
   const [type, setType] = useState<TypeFilter>("all");
   const [range, setRange] = useState<RangeFilter>("today");
-  const [customStartDate, setCustomStartDate] = useState(todayInputValue);
-  const [customEndDate, setCustomEndDate] = useState(todayInputValue);
+  const [selectedDate, setSelectedDate] = useState(todayInputValue);
   const [selectedClientId, setSelectedClientId] = useState("all");
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const queryParams = useMemo(() => {
     const params = new URLSearchParams({ type, range });
     if (selectedClientId !== "all") params.set("clientId", selectedClientId);
-    if (range === "custom") {
-      if (customStartDate) params.set("startDate", customStartDate);
-      if (customEndDate) params.set("endDate", customEndDate);
-    }
+    if (range === "date" && selectedDate) params.set("date", selectedDate);
     return params;
-  }, [customEndDate, customStartDate, range, selectedClientId, type]);
+  }, [range, selectedClientId, selectedDate, type]);
   const { data: clients, loading: clientsLoading } = useApiResource<Client[]>("/clients", []);
   const {
     data,
@@ -190,34 +186,20 @@ function TrainerMealsPage() {
               <SelectContent>
                 <SelectItem value="today">Today</SelectItem>
                 <SelectItem value="week">This week</SelectItem>
-                <SelectItem value="custom">Custom range</SelectItem>
+                <SelectItem value="date">Select date</SelectItem>
                 <SelectItem value="all">All time</SelectItem>
               </SelectContent>
             </Select>
-            {range === "custom" ? (
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <div className="relative">
-                  <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    aria-label="Start date"
-                    type="date"
-                    value={customStartDate}
-                    max={customEndDate || undefined}
-                    onChange={(event) => setCustomStartDate(event.target.value)}
-                    className="h-10 rounded-xl pl-9 sm:w-40"
-                  />
-                </div>
-                <div className="relative">
-                  <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    aria-label="End date"
-                    type="date"
-                    value={customEndDate}
-                    min={customStartDate || undefined}
-                    onChange={(event) => setCustomEndDate(event.target.value)}
-                    className="h-10 rounded-xl pl-9 sm:w-40"
-                  />
-                </div>
+            {range === "date" ? (
+              <div className="relative">
+                <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  aria-label="Meal upload date"
+                  type="date"
+                  value={selectedDate}
+                  onChange={(event) => setSelectedDate(event.target.value)}
+                  className="h-10 rounded-xl pl-9 sm:w-40"
+                />
               </div>
             ) : null}
           </div>

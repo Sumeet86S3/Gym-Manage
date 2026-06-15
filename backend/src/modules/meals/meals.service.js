@@ -9,13 +9,11 @@ export async function list(user, query = {}) {
   const where = [isNull(mealLogs.deletedAt)];
   if (query.type && query.type !== "all") where.push(eq(mealLogs.type, query.type));
   if (query.clientId) where.push(eq(mealLogs.clientId, query.clientId));
-  if (query.startDate) {
-    where.push(gte(mealLogs.loggedAt, dayStart(query.startDate).toISOString()));
+  if (query.date) {
+    where.push(gte(mealLogs.loggedAt, dayStart(query.date).toISOString()));
+    where.push(lte(mealLogs.loggedAt, dayEnd(query.date).toISOString()));
   }
-  if (query.endDate) {
-    where.push(lte(mealLogs.loggedAt, dayEnd(query.endDate).toISOString()));
-  }
-  if (!query.startDate && !query.endDate && query.range && query.range !== "all") {
+  if (!query.date && query.range && query.range !== "all") {
     where.push(gte(mealLogs.loggedAt, rangeStart(query.range).toISOString()));
   }
   if (query.search) where.push(like(clients.name, `%${query.search}%`));
