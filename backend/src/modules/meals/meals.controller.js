@@ -10,6 +10,10 @@ export const missedSummary = asyncHandler(async (req, res) => {
   success(res, await service.missedSummary(req.user));
 });
 
+export const clearForClient = asyncHandler(async (req, res) => {
+  success(res, await service.clearForClient(req.user, req.validated.body), "Meal history cleared");
+});
+
 export const create = asyncHandler(async (req, res) => {
   created(res, await service.create(req.user, req.validated.body), "Meal logged");
 });

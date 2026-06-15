@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
+import { eq } from "drizzle-orm";
 
 process.env.NODE_ENV = "test";
 process.env.JWT_ACCESS_SECRET = "test-access-secret-that-is-at-least-32-chars";
@@ -12,7 +13,7 @@ process.env.IMAGEKIT_PRIVATE_KEY = "test-private";
 await import("../scripts/migrate.js");
 
 const { db } = await import("../src/config/db.js");
-const { clients, mealLogs, trainers, users } = await import("../src/db/schema.js");
+const { clients, mealClearances, mealLogs, trainers, users } = await import("../src/db/schema.js");
 const mealsService = await import("../src/modules/meals/meals.service.js");
 
 const now = new Date();
@@ -30,16 +31,10 @@ const trainerUser = user(ids.trainerUser, "trainer-meals@test.local", "trainer")
 
 await db
   .insert(users)
-  .values([
-    trainerUser,
-    user(ids.otherTrainerUser, "other-trainer-meals@test.local", "trainer"),
-  ]);
+  .values([trainerUser, user(ids.otherTrainerUser, "other-trainer-meals@test.local", "trainer")]);
 await db
   .insert(trainers)
-  .values([
-    trainer(ids.trainer, ids.trainerUser),
-    trainer(ids.otherTrainer, ids.otherTrainerUser),
-  ]);
+  .values([trainer(ids.trainer, ids.trainerUser), trainer(ids.otherTrainer, ids.otherTrainerUser)]);
 await db
   .insert(clients)
   .values([
@@ -47,29 +42,33 @@ await db
     client(ids.clientWeek, ids.trainer, "Week Client", dateInput(daysAgo(8))),
     client(ids.clientOtherTrainer, ids.otherTrainer, "Other Trainer Client"),
   ]);
-await db.insert(mealLogs).values([
-  meal(ids.clientToday, "Breakfast", atLocalTime(10)),
-  meal(ids.clientToday, "Dinner", daysAgo(2)),
-  meal(ids.clientWeek, "Lunch", daysAgo(6)),
-  meal(ids.clientWeek, "Evening Snack", daysAgo(8)),
-  meal(ids.clientOtherTrainer, "Lunch", atLocalTime(11)),
-]);
+await db
+  .insert(mealLogs)
+  .values([
+    meal(ids.clientToday, "Breakfast", atLocalTime(10)),
+    meal(ids.clientToday, "Dinner", daysAgo(2)),
+    meal(ids.clientWeek, "Lunch", daysAgo(6)),
+    meal(ids.clientWeek, "Evening Snack", daysAgo(8)),
+    meal(ids.clientOtherTrainer, "Lunch", atLocalTime(11)),
+  ]);
 
 test("trainer meal duration filters use owned client meals", async () => {
   const today = await mealsService.list(trainerUser, { range: "today", type: "all" });
-  assert.deepEqual(today.map((row) => row.type), ["Breakfast"]);
+  assert.deepEqual(
+    today.map((row) => row.type),
+    ["Breakfast"],
+  );
 
   const week = await mealsService.list(trainerUser, { range: "week", type: "all" });
-  assert.deepEqual(
-    week.map((row) => row.type).sort(),
-    ["Breakfast", "Dinner", "Lunch"],
-  );
+  assert.deepEqual(week.map((row) => row.type).sort(), ["Breakfast", "Dinner", "Lunch"]);
 
   const all = await mealsService.list(trainerUser, { range: "all", type: "all" });
-  assert.deepEqual(
-    all.map((row) => row.type).sort(),
-    ["Breakfast", "Dinner", "Evening Snack", "Lunch"],
-  );
+  assert.deepEqual(all.map((row) => row.type).sort(), [
+    "Breakfast",
+    "Dinner",
+    "Evening Snack",
+    "Lunch",
+  ]);
 });
 
 test("trainer meal client and type filters combine with duration", async () => {
@@ -91,7 +90,10 @@ test("trainer meal selected date filter includes the full day", async () => {
     type: "all",
   });
 
-  assert.deepEqual(rows.map((row) => row.type), ["Dinner"]);
+  assert.deepEqual(
+    rows.map((row) => row.type),
+    ["Dinner"],
+  );
 });
 
 test("trainer meal missed summary counts each missing meal type through yesterday", async () => {
@@ -131,12 +133,50 @@ test("trainer meal pagination returns stable pages and next page state", async (
   assert.equal(firstPage.items.length, 2);
   assert.equal(firstPage.hasMore, true);
   assert.equal(firstPage.nextPage, 2);
-  assert.deepEqual(firstPage.items.map((row) => row.type), ["Breakfast", "Dinner"]);
+  assert.deepEqual(
+    firstPage.items.map((row) => row.type),
+    ["Breakfast", "Dinner"],
+  );
 
   assert.equal(secondPage.items.length, 2);
   assert.equal(secondPage.hasMore, false);
   assert.equal(secondPage.nextPage, null);
-  assert.deepEqual(secondPage.items.map((row) => row.type), ["Lunch", "Evening Snack"]);
+  assert.deepEqual(
+    secondPage.items.map((row) => row.type),
+    ["Lunch", "Evening Snack"],
+  );
+});
+
+test("trainer can clear selected client meal updates and missed meals through today", async () => {
+  const result = await mealsService.clearForClient(trainerUser, { clientId: ids.clientToday });
+
+  assert.equal(result.clientId, ids.clientToday);
+  assert.equal(result.deletedMealUpdates, 2);
+  assert.equal(result.clearedThrough, dateInput(now));
+
+  const rows = await mealsService.list(trainerUser, { range: "all", type: "all" });
+  assert.deepEqual(rows.map((row) => row.clientId).sort(), [ids.clientWeek, ids.clientWeek]);
+
+  const summary = await mealsService.missedSummary(trainerUser);
+  assert.equal(summary.totalMissed, 54);
+  assert.deepEqual(
+    summary.clients.map((client) => client.clientId),
+    [ids.clientWeek],
+  );
+
+  const [clearance] = await db
+    .select()
+    .from(mealClearances)
+    .where(eq(mealClearances.clientId, ids.clientToday))
+    .limit(1);
+  assert.equal(clearance.clearedThrough, dateInput(now));
+});
+
+test("trainer cannot clear another trainer's client meals", async () => {
+  await assert.rejects(
+    mealsService.clearForClient(trainerUser, { clientId: ids.clientOtherTrainer }),
+    /Client not found/,
+  );
 });
 
 function user(id, email, role) {

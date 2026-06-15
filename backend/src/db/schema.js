@@ -155,6 +155,20 @@ export const mealLogs = sqliteTable(
   }),
 );
 
+export const mealClearances = sqliteTable(
+  "meal_clearances",
+  {
+    clientId: text("client_id")
+      .primaryKey()
+      .references(() => clients.id, { onDelete: "cascade" }),
+    clearedThrough: text("cleared_through").notNull(),
+    ...timestamps,
+  },
+  (table) => ({
+    clearedThroughIdx: index("meal_clearances_cleared_through_idx").on(table.clearedThrough),
+  }),
+);
+
 export const attendance = sqliteTable(
   "attendance",
   {

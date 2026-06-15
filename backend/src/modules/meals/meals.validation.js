@@ -14,7 +14,10 @@ export const listMealsSchema = z.object({
   query: z.object({
     type: z.enum([...mealTypes, "all"]).optional(),
     range: z.enum(["today", "week", "date", "all"]).optional(),
-    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
     search: z.string().optional(),
     clientId: z.string().uuid().optional(),
     limit: z.coerce.number().int().min(1).max(40).optional(),
@@ -35,5 +38,11 @@ export const createMealSchema = z.object({
       .max(14_000_000, "Meal image must be under 10MB"),
     imageFileName: z.string().max(255).optional(),
     loggedAt: z.string().datetime().optional(),
+  }),
+});
+
+export const clearMealsSchema = z.object({
+  body: z.object({
+    clientId: z.string().uuid(),
   }),
 });

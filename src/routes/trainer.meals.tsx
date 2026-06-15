@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
   CalendarDays,
@@ -8,13 +8,24 @@ import {
   Filter,
   LoaderCircle,
   RefreshCw,
+  Trash2,
   UtensilsCrossed,
 } from "lucide-react";
+import { toast } from "sonner";
 import { PageHeader } from "@/components/app-shell";
 import { MealTypeBadge } from "@/components/meal/meal-type-badge";
 import type { Client, MealEntry, MealType } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Select,
   SelectContent,
@@ -53,10 +64,13 @@ type MissedMealSummary = {
 const MEAL_PAGE_SIZE = 12;
 
 function TrainerMealsPage() {
+  const queryClient = useQueryClient();
   const [type, setType] = useState<TypeFilter>("all");
   const [range, setRange] = useState<RangeFilter>("today");
   const [selectedDate, setSelectedDate] = useState(todayInputValue);
   const [selectedClientId, setSelectedClientId] = useState("all");
+  const [clearDialogOpen, setClearDialogOpen] = useState(false);
+  const [clearingMeals, setClearingMeals] = useState(false);
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const queryParams = useMemo(() => {
     const params = new URLSearchParams({ type, range });
@@ -120,6 +134,38 @@ function TrainerMealsPage() {
       })),
     [data],
   );
+  const selectedClient = useMemo(
+    () => clients.find((client) => client.id === selectedClientId) ?? null,
+    [clients, selectedClientId],
+  );
+
+  const clearSelectedClientMeals = async () => {
+    if (!selectedClient) return;
+    setClearingMeals(true);
+    try {
+      const result = await api<{
+        clientName: string;
+        deletedMealUpdates: number;
+      }>("/meals/clear", {
+        method: "DELETE",
+        body: JSON.stringify({ clientId: selectedClient.id }),
+      });
+      await Promise.all([
+        refetch(),
+        queryClient.invalidateQueries({ queryKey: ["api", "/meals/missed"] }),
+      ]);
+      toast.success("Meal history cleared.", {
+        description: `${result.deletedMealUpdates} meal update${
+          result.deletedMealUpdates === 1 ? "" : "s"
+        } removed for ${result.clientName}.`,
+      });
+      setClearDialogOpen(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to clear meal history.");
+    } finally {
+      setClearingMeals(false);
+    }
+  };
 
   const typeChips: TypeFilter[] = [
     "all",
@@ -221,6 +267,16 @@ function TrainerMealsPage() {
                 />
               </div>
             ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              className="h-10 rounded-xl text-destructive hover:bg-destructive/10 hover:text-destructive"
+              disabled={!selectedClient || clearingMeals}
+              onClick={() => setClearDialogOpen(true)}
+            >
+              <Trash2 className="h-4 w-4" />
+              Clear selected
+            </Button>
           </div>
         </div>
       </div>
@@ -265,6 +321,35 @@ function TrainerMealsPage() {
           )}
         </div>
       ) : null}
+
+      <AlertDialog
+        open={clearDialogOpen}
+        onOpenChange={(next) => {
+          if (!next && !clearingMeals) setClearDialogOpen(false);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear meal history?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently deletes all meal updates for{" "}
+              {selectedClient?.name ?? "the selected client"} through today and clears their missed
+              meal updates through today.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={clearingMeals}>Cancel</AlertDialogCancel>
+            <button
+              type="button"
+              onClick={clearSelectedClientMeals}
+              disabled={clearingMeals || !selectedClient}
+              className="inline-flex h-9 items-center justify-center rounded-md bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground shadow transition-colors hover:bg-destructive/90 disabled:pointer-events-none disabled:opacity-50"
+            >
+              {clearingMeals ? "Clearing..." : "Clear history"}
+            </button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

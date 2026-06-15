@@ -1,8 +1,9 @@
 import { and, desc, eq, gte, inArray, isNull, like, lt, lte } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { db } from "../../config/db.js";
-import { clients, mealLogs } from "../../db/schema.js";
+import { clients, mealClearances, mealLogs } from "../../db/schema.js";
 import { uploadMealImage } from "../../services/imagekit.service.js";
+import { AppError } from "../../utils/AppError.js";
 import { clientForUser, trainerForUser } from "../clients/clients.service.js";
 
 const mealTypes = [
@@ -93,6 +94,64 @@ export async function create(user, input) {
   return meal;
 }
 
+export async function clearForClient(user, input) {
+  if (user.role !== "trainer") throw new AppError("Only trainers can clear client meals", 403);
+
+  const trainer = await trainerForUser(user);
+  const [client] = await db
+    .select({
+      id: clients.id,
+      name: clients.name,
+    })
+    .from(clients)
+    .where(
+      and(
+        eq(clients.id, input.clientId),
+        eq(clients.trainerId, trainer.id),
+        isNull(clients.deletedAt),
+      ),
+    )
+    .limit(1);
+
+  if (!client) throw new AppError("Client not found", 404);
+
+  const now = new Date();
+  const clearedThrough = dateKey(now);
+  const deletedRows = await db
+    .delete(mealLogs)
+    .where(
+      and(
+        eq(mealLogs.clientId, client.id),
+        lte(mealLogs.loggedAt, dayEnd(clearedThrough).toISOString()),
+      ),
+    )
+    .returning({ id: mealLogs.id });
+
+  await db
+    .insert(mealClearances)
+    .values({
+      clientId: client.id,
+      clearedThrough,
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+    })
+    .onConflictDoUpdate({
+      target: mealClearances.clientId,
+      set: {
+        clearedThrough,
+        updatedAt: now.toISOString(),
+        deletedAt: null,
+      },
+    });
+
+  return {
+    clientId: client.id,
+    clientName: client.name,
+    clearedThrough,
+    deletedMealUpdates: deletedRows.length,
+  };
+}
+
 export async function missedSummary(user) {
   const ownedClients = await clientsForMealSummary(user);
   const activeClients = ownedClients.filter((client) => client.status === "Active");
@@ -108,6 +167,16 @@ export async function missedSummary(user) {
   }
 
   const clientIds = activeClients.map((client) => client.id);
+  const clearanceRows = await db
+    .select({
+      clientId: mealClearances.clientId,
+      clearedThrough: mealClearances.clearedThrough,
+    })
+    .from(mealClearances)
+    .where(and(inArray(mealClearances.clientId, clientIds), isNull(mealClearances.deletedAt)));
+  const clearedThroughByClient = new Map(
+    clearanceRows.map((row) => [row.clientId, row.clearedThrough]),
+  );
   const rows = await db
     .select({
       clientId: mealLogs.clientId,
@@ -139,6 +208,7 @@ export async function missedSummary(user) {
         client.joinedAt,
         yesterday,
         loggedTypesByClientDate.get(client.id),
+        clearedThroughByClient.get(client.id),
       );
       return {
         clientId: client.id,
@@ -210,9 +280,14 @@ function parseDateInput(value) {
   return new Date(year, month - 1, day);
 }
 
-function missedMealUpdates(joinedAt, yesterday, loggedTypesByDate = new Map()) {
+function missedMealUpdates(joinedAt, yesterday, loggedTypesByDate = new Map(), clearedThrough) {
   const date = parseDateInput(joinedAt.slice(0, 10));
   date.setHours(0, 0, 0, 0);
+  if (clearedThrough) {
+    const firstUnclearedDate = parseDateInput(clearedThrough.slice(0, 10));
+    firstUnclearedDate.setDate(firstUnclearedDate.getDate() + 1);
+    if (firstUnclearedDate > date) date.setTime(firstUnclearedDate.getTime());
+  }
   let count = 0;
   let lastDate = null;
 
