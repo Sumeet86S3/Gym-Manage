@@ -300,11 +300,11 @@ function MissedMealPanel({ summary }: { summary: MissedMealSummary }) {
         <div>
           <p className="text-sm font-semibold text-foreground">Missed meal updates</p>
           <p className="text-sm text-muted-foreground">
-            Full days with no meal uploads, counted through yesterday.
+            Missing meal types on completed days, counted through yesterday.
           </p>
         </div>
         <p className="text-sm font-semibold text-destructive">
-          {summary.totalMissed} {summary.totalMissed === 1 ? "missed day" : "missed days"}
+          {summary.totalMissed} {summary.totalMissed === 1 ? "missed update" : "missed updates"}
         </p>
       </div>
       <div className="mt-3 grid gap-2 md:grid-cols-3">

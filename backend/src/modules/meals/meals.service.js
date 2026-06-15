@@ -5,6 +5,16 @@ import { clients, mealLogs } from "../../db/schema.js";
 import { uploadMealImage } from "../../services/imagekit.service.js";
 import { clientForUser, trainerForUser } from "../clients/clients.service.js";
 
+const mealTypes = [
+  "Warm water",
+  "Breakfast",
+  "Lunch",
+  "Evening Snack",
+  "Dinner",
+  "Pre-Workout",
+  "Post-Workout",
+];
+
 export async function list(user, query = {}) {
   const where = [isNull(mealLogs.deletedAt)];
   if (query.type && query.type !== "all") where.push(eq(mealLogs.type, query.type));
@@ -101,6 +111,7 @@ export async function missedSummary(user) {
   const rows = await db
     .select({
       clientId: mealLogs.clientId,
+      type: mealLogs.type,
       loggedAt: mealLogs.loggedAt,
     })
     .from(mealLogs)
@@ -112,25 +123,28 @@ export async function missedSummary(user) {
       ),
     );
 
-  const loggedDatesByClient = new Map();
+  const loggedTypesByClientDate = new Map();
   for (const row of rows) {
-    const dates = loggedDatesByClient.get(row.clientId) ?? new Set();
-    dates.add(dateKey(new Date(row.loggedAt)));
-    loggedDatesByClient.set(row.clientId, dates);
+    const clientDates = loggedTypesByClientDate.get(row.clientId) ?? new Map();
+    const key = dateKey(new Date(row.loggedAt));
+    const types = clientDates.get(key) ?? new Set();
+    types.add(row.type);
+    clientDates.set(key, types);
+    loggedTypesByClientDate.set(row.clientId, clientDates);
   }
 
   const clientSummaries = activeClients
     .map((client) => {
-      const missedDates = missedMealDates(
+      const missed = missedMealUpdates(
         client.joinedAt,
         yesterday,
-        loggedDatesByClient.get(client.id),
+        loggedTypesByClientDate.get(client.id),
       );
       return {
         clientId: client.id,
         clientName: client.name,
-        missedCount: missedDates.length,
-        lastMissedDate: missedDates.at(-1) ?? null,
+        missedCount: missed.count,
+        lastMissedDate: missed.lastDate,
       };
     })
     .filter((client) => client.missedCount > 0)
@@ -196,18 +210,24 @@ function parseDateInput(value) {
   return new Date(year, month - 1, day);
 }
 
-function missedMealDates(joinedAt, yesterday, loggedDates = new Set()) {
+function missedMealUpdates(joinedAt, yesterday, loggedTypesByDate = new Map()) {
   const date = parseDateInput(joinedAt.slice(0, 10));
   date.setHours(0, 0, 0, 0);
-  const missedDates = [];
+  let count = 0;
+  let lastDate = null;
 
   while (date <= yesterday) {
     const key = dateKey(date);
-    if (!loggedDates.has(key)) missedDates.push(key);
+    const loggedTypes = loggedTypesByDate.get(key) ?? new Set();
+    const missedForDay = mealTypes.filter((type) => !loggedTypes.has(type)).length;
+    if (missedForDay > 0) {
+      count += missedForDay;
+      lastDate = key;
+    }
     date.setDate(date.getDate() + 1);
   }
 
-  return missedDates;
+  return { count, lastDate };
 }
 
 function dateKey(date) {

@@ -94,21 +94,21 @@ test("trainer meal selected date filter includes the full day", async () => {
   assert.deepEqual(rows.map((row) => row.type), ["Dinner"]);
 });
 
-test("trainer meal missed summary counts owned active clients through yesterday", async () => {
+test("trainer meal missed summary counts each missing meal type through yesterday", async () => {
   const summary = await mealsService.missedSummary(trainerUser);
 
-  assert.equal(summary.totalMissed, 7);
+  assert.equal(summary.totalMissed, 67);
   assert.deepEqual(summary.clients, [
     {
       clientId: ids.clientWeek,
       clientName: "Week Client",
-      missedCount: 6,
+      missedCount: 54,
       lastMissedDate: dateInput(daysAgo(1)),
     },
     {
       clientId: ids.clientToday,
       clientName: "Today Client",
-      missedCount: 1,
+      missedCount: 13,
       lastMissedDate: dateInput(daysAgo(1)),
     },
   ]);
