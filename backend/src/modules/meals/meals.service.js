@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNull, like, lte } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, like, lt, lte } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { db } from "../../config/db.js";
 import { clients, mealLogs } from "../../db/schema.js";
@@ -83,10 +83,99 @@ export async function create(user, input) {
   return meal;
 }
 
+export async function missedSummary(user) {
+  const ownedClients = await clientsForMealSummary(user);
+  const activeClients = ownedClients.filter((client) => client.status === "Active");
+  const todayStart = startOfToday();
+  const yesterday = new Date(todayStart);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  if (activeClients.length === 0) {
+    return {
+      totalMissed: 0,
+      clients: [],
+    };
+  }
+
+  const clientIds = activeClients.map((client) => client.id);
+  const rows = await db
+    .select({
+      clientId: mealLogs.clientId,
+      loggedAt: mealLogs.loggedAt,
+    })
+    .from(mealLogs)
+    .where(
+      and(
+        isNull(mealLogs.deletedAt),
+        inArray(mealLogs.clientId, clientIds),
+        lt(mealLogs.loggedAt, todayStart.toISOString()),
+      ),
+    );
+
+  const loggedDatesByClient = new Map();
+  for (const row of rows) {
+    const dates = loggedDatesByClient.get(row.clientId) ?? new Set();
+    dates.add(dateKey(new Date(row.loggedAt)));
+    loggedDatesByClient.set(row.clientId, dates);
+  }
+
+  const clientSummaries = activeClients
+    .map((client) => {
+      const missedDates = missedMealDates(
+        client.joinedAt,
+        yesterday,
+        loggedDatesByClient.get(client.id),
+      );
+      return {
+        clientId: client.id,
+        clientName: client.name,
+        missedCount: missedDates.length,
+        lastMissedDate: missedDates.at(-1) ?? null,
+      };
+    })
+    .filter((client) => client.missedCount > 0)
+    .sort((a, b) => b.missedCount - a.missedCount || a.clientName.localeCompare(b.clientName));
+
+  return {
+    totalMissed: clientSummaries.reduce((total, client) => total + client.missedCount, 0),
+    clients: clientSummaries,
+  };
+}
+
+async function clientsForMealSummary(user) {
+  const where = [isNull(clients.deletedAt)];
+
+  if (user.role === "trainer") {
+    const trainer = await trainerForUser(user);
+    where.push(eq(clients.trainerId, trainer.id));
+  }
+
+  if (user.role === "client") {
+    const client = await clientForUser(user);
+    where.push(eq(clients.id, client.id));
+  }
+
+  return db
+    .select({
+      id: clients.id,
+      name: clients.name,
+      status: clients.status,
+      joinedAt: clients.joinedAt,
+    })
+    .from(clients)
+    .where(and(...where));
+}
+
 function rangeStart(range) {
   const date = new Date();
   date.setHours(0, 0, 0, 0);
   if (range === "week") date.setDate(date.getDate() - 6);
+  return date;
+}
+
+function startOfToday() {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
   return date;
 }
 
@@ -105,4 +194,25 @@ function dayEnd(value) {
 function parseDateInput(value) {
   const [year, month, day] = value.split("-").map(Number);
   return new Date(year, month - 1, day);
+}
+
+function missedMealDates(joinedAt, yesterday, loggedDates = new Set()) {
+  const date = parseDateInput(joinedAt.slice(0, 10));
+  date.setHours(0, 0, 0, 0);
+  const missedDates = [];
+
+  while (date <= yesterday) {
+    const key = dateKey(date);
+    if (!loggedDates.has(key)) missedDates.push(key);
+    date.setDate(date.getDate() + 1);
+  }
+
+  return missedDates;
+}
+
+function dateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }

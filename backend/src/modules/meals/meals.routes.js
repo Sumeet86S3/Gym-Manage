@@ -8,6 +8,7 @@ import { createMealSchema, listMealsSchema } from "./meals.validation.js";
 export const mealRoutes = Router();
 
 mealRoutes.use(authenticate);
+mealRoutes.get("/missed", authorize("admin", "trainer", "client"), controller.missedSummary);
 mealRoutes.get(
   "/",
   authorize("admin", "trainer", "client"),

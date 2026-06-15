@@ -6,6 +6,10 @@ export const list = asyncHandler(async (req, res) => {
   success(res, await service.list(req.user, req.validated.query));
 });
 
+export const missedSummary = asyncHandler(async (req, res) => {
+  success(res, await service.missedSummary(req.user));
+});
+
 export const create = asyncHandler(async (req, res) => {
   created(res, await service.create(req.user, req.validated.body), "Meal logged");
 });

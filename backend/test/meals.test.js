@@ -43,8 +43,8 @@ await db
 await db
   .insert(clients)
   .values([
-    client(ids.clientToday, ids.trainer, "Today Client"),
-    client(ids.clientWeek, ids.trainer, "Week Client"),
+    client(ids.clientToday, ids.trainer, "Today Client", dateInput(daysAgo(2))),
+    client(ids.clientWeek, ids.trainer, "Week Client", dateInput(daysAgo(8))),
     client(ids.clientOtherTrainer, ids.otherTrainer, "Other Trainer Client"),
   ]);
 await db.insert(mealLogs).values([
@@ -92,6 +92,26 @@ test("trainer meal selected date filter includes the full day", async () => {
   });
 
   assert.deepEqual(rows.map((row) => row.type), ["Dinner"]);
+});
+
+test("trainer meal missed summary counts owned active clients through yesterday", async () => {
+  const summary = await mealsService.missedSummary(trainerUser);
+
+  assert.equal(summary.totalMissed, 7);
+  assert.deepEqual(summary.clients, [
+    {
+      clientId: ids.clientWeek,
+      clientName: "Week Client",
+      missedCount: 6,
+      lastMissedDate: dateInput(daysAgo(1)),
+    },
+    {
+      clientId: ids.clientToday,
+      clientName: "Today Client",
+      missedCount: 1,
+      lastMissedDate: dateInput(daysAgo(1)),
+    },
+  ]);
 });
 
 test("trainer meal pagination returns stable pages and next page state", async () => {
@@ -146,7 +166,7 @@ function trainer(id, userId) {
   };
 }
 
-function client(id, trainerId, name) {
+function client(id, trainerId, name, joinedAt = now.toISOString().slice(0, 10)) {
   return {
     id,
     trainerId,
@@ -154,7 +174,7 @@ function client(id, trainerId, name) {
     email: `${id}@test.local`,
     goal: "General fitness",
     status: "Active",
-    joinedAt: now.toISOString().slice(0, 10),
+    joinedAt,
     plan: "Monthly",
     monthlyFee: 1000,
     paymentStatus: "Paid",

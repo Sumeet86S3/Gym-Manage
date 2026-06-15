@@ -25,7 +25,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useApiResource } from "@/hooks/use-api-resource";
-import { api } from "@/lib/api";
+import { api, formatDateLabel } from "@/lib/api";
 
 export const Route = createFileRoute("/trainer/meals")({
   component: TrainerMealsPage,
@@ -39,6 +39,15 @@ type MealPage = {
   page: number;
   nextPage: number | null;
   hasMore: boolean;
+};
+type MissedMealSummary = {
+  totalMissed: number;
+  clients: Array<{
+    clientId: string;
+    clientName: string;
+    missedCount: number;
+    lastMissedDate: string | null;
+  }>;
 };
 
 const MEAL_PAGE_SIZE = 12;
@@ -56,6 +65,10 @@ function TrainerMealsPage() {
     return params;
   }, [range, selectedClientId, selectedDate, type]);
   const { data: clients, loading: clientsLoading } = useApiResource<Client[]>("/clients", []);
+  const { data: missedMeals } = useApiResource<MissedMealSummary>("/meals/missed", {
+    totalMissed: 0,
+    clients: [],
+  });
   const {
     data,
     error,
@@ -122,13 +135,14 @@ function TrainerMealsPage() {
     total: normalized.length,
     clients: new Set(normalized.map((m) => m.clientId)).size,
     week: normalized.length,
+    missed: missedMeals.totalMissed,
   };
 
   return (
     <div className="space-y-6">
       <PageHeader title="Meal Updates" description="Live feed of client meal uploads." />
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <MiniStat label="Meals in view" value={stats.total} accent="from-primary to-primary-glow" />
         <MiniStat
           label="Active clients"
@@ -139,6 +153,11 @@ function TrainerMealsPage() {
           label="Filtered entries"
           value={stats.week}
           accent="from-orange-500 to-amber-400"
+        />
+        <MiniStat
+          label="Missed updates"
+          value={stats.missed}
+          accent="from-destructive to-orange-500"
         />
       </div>
 
@@ -206,6 +225,8 @@ function TrainerMealsPage() {
         </div>
       </div>
 
+      {missedMeals.totalMissed > 0 ? <MissedMealPanel summary={missedMeals} /> : null}
+
       {isLoading ? (
         <MealFeedSkeleton />
       ) : isError ? (
@@ -268,6 +289,42 @@ function MiniStat({
       >
         {value}
       </p>
+    </div>
+  );
+}
+
+function MissedMealPanel({ summary }: { summary: MissedMealSummary }) {
+  return (
+    <div className="rounded-2xl border border-destructive/20 bg-destructive/5 p-4 shadow-card">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-foreground">Missed meal updates</p>
+          <p className="text-sm text-muted-foreground">
+            Full days with no meal uploads, counted through yesterday.
+          </p>
+        </div>
+        <p className="text-sm font-semibold text-destructive">
+          {summary.totalMissed} {summary.totalMissed === 1 ? "missed day" : "missed days"}
+        </p>
+      </div>
+      <div className="mt-3 grid gap-2 md:grid-cols-3">
+        {summary.clients.slice(0, 3).map((client) => (
+          <div
+            key={client.clientId}
+            className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background px-3 py-2.5"
+          >
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-foreground">{client.clientName}</p>
+              <p className="text-xs text-muted-foreground">
+                Last missed {formatDateLabel(client.lastMissedDate)}
+              </p>
+            </div>
+            <span className="shrink-0 rounded-full bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive">
+              {client.missedCount}
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
