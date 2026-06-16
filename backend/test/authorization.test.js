@@ -34,6 +34,8 @@ const clientsService = await import("../src/modules/clients/clients.service.js")
 const trainersService = await import("../src/modules/trainers/trainers.service.js");
 const workoutsService = await import("../src/modules/workouts/workouts.service.js");
 const attendanceService = await import("../src/modules/attendance/attendance.service.js");
+const measurementsService = await import("../src/modules/measurements/measurements.service.js");
+const measurementsValidation = await import("../src/modules/measurements/measurements.validation.js");
 
 const now = new Date().toISOString();
 const ids = {
@@ -265,6 +267,81 @@ test("trainer attendance settings are validated and exposed to trainer and clien
     }),
     (error) => error.statusCode === 400,
   );
+});
+
+test("trainer measurement create updates an existing client/date entry", async () => {
+  const measuredAt = "2026-06-10T12:00:00.000Z";
+  const first = await measurementsService.create(trainerUserA, {
+    clientId: ids.clientA,
+    weight: 82,
+    waist: 92,
+    trainerNote: "Initial check-in",
+    measuredAt,
+  });
+  const second = await measurementsService.create(trainerUserA, {
+    clientId: ids.clientA,
+    weight: 80.5,
+    waist: 90,
+    condition: "Morning, fasted",
+    measuredAt: "2026-06-10T16:00:00.000Z",
+  });
+
+  assert.equal(second.id, first.id);
+  assert.equal(second.weight, 80.5);
+  assert.equal(second.waist, 90);
+  assert.equal(second.condition, "Morning, fasted");
+  assert.equal(await countRows(measurements, measurements.clientId, ids.clientA), 1);
+});
+
+test("trainer can patch and delete owned measurements only", async () => {
+  const owned = await measurementsService.create(trainerUserA, {
+    clientId: ids.clientA,
+    weight: 79,
+    measuredAt: "2026-06-11T12:00:00.000Z",
+  });
+  const other = await measurementsService.create(trainerUserB, {
+    clientId: ids.clientB,
+    weight: 88,
+    measuredAt: "2026-06-11T12:00:00.000Z",
+  });
+
+  const updated = await measurementsService.update(trainerUserA, owned.id, {
+    weight: 78.2,
+    frontPhotoUrl: "https://example.com/front.jpg",
+  });
+  assert.equal(updated.weight, 78.2);
+  assert.equal(updated.frontPhotoUrl, "https://example.com/front.jpg");
+
+  await assert.rejects(
+    measurementsService.update(trainerUserA, other.id, { weight: 87 }),
+    (error) => error.statusCode === 404,
+  );
+  await assert.rejects(
+    measurementsService.remove(trainerUserA, other.id),
+    (error) => error.statusCode === 404,
+  );
+
+  await measurementsService.remove(trainerUserA, owned.id);
+  assert.equal(await countRows(measurements, measurements.id, owned.id), 0);
+  assert.equal(await countRows(measurements, measurements.id, other.id), 1);
+});
+
+test("measurement validation rejects unrealistic typo ranges", () => {
+  const result = measurementsValidation.createMeasurementSchema.safeParse({
+    body: {
+      clientId: ids.clientA,
+      weight: 351,
+      waist: 800,
+      height: 261,
+      measuredAt: "2026-06-12T12:00:00.000Z",
+    },
+  });
+
+  assert.equal(result.success, false);
+  const errors = result.error.format();
+  assert.ok(errors.body?.weight?._errors.length);
+  assert.ok(errors.body?.waist?._errors.length);
+  assert.ok(errors.body?.height?._errors.length);
 });
 
 test("trainer cannot delete another trainer's client", async () => {

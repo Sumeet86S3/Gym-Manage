@@ -3,7 +3,7 @@ import { logger } from "../config/logger.js";
 
 export async function ensureRuntimeSchema() {
   const tables = await turso.execute(
-    "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('clients', 'payments', 'refresh_sessions', 'trainers', 'attendance')",
+    "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('clients', 'payments', 'refresh_sessions', 'trainers', 'attendance', 'measurements')",
   );
   const tableNames = new Set(tables.rows.map((row) => row.name));
   if (!tableNames.has("clients") || !tableNames.has("payments")) {
@@ -65,6 +65,24 @@ export async function ensureRuntimeSchema() {
     for (const [name, statement] of attendanceAdds) {
       if (!attendanceColumnNames.has(name)) {
         logger.info({ column: name }, "Adding missing attendance location audit column");
+        await turso.execute(statement);
+      }
+    }
+  }
+
+  if (tableNames.has("measurements")) {
+    const measurementColumns = await turso.execute("PRAGMA table_info(measurements)");
+    const measurementColumnNames = new Set(measurementColumns.rows.map((column) => column.name));
+    const measurementAdds = [
+      ["trainer_note", "ALTER TABLE measurements ADD trainer_note text"],
+      ["condition", "ALTER TABLE measurements ADD condition text"],
+      ["front_photo_url", "ALTER TABLE measurements ADD front_photo_url text"],
+      ["side_photo_url", "ALTER TABLE measurements ADD side_photo_url text"],
+      ["back_photo_url", "ALTER TABLE measurements ADD back_photo_url text"],
+    ];
+    for (const [name, statement] of measurementAdds) {
+      if (!measurementColumnNames.has(name)) {
+        logger.info({ column: name }, "Adding missing measurement note/photo column");
         await turso.execute(statement);
       }
     }

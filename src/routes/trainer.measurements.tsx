@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { CalendarDays, ChevronDown, Save, Users } from "lucide-react";
+import { CalendarDays, ChevronDown, Edit2, Image, Save, StickyNote, Trash2, X, Users } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { PageHeader } from "@/components/app-shell";
+import { ProgressChart } from "@/components/measurements/ProgressChart";
 import {
   measurementFields,
   type BodyMeasurementEntry,
@@ -28,8 +29,12 @@ function MeasurementsPage() {
   const [selectedClientId, setSelectedClientId] = useState("");
   const [selectedWeek, setSelectedWeek] = useState("");
   const [values, setValues] = useState(emptyValues);
+  const [trainerNote, setTrainerNote] = useState("");
+  const [condition, setCondition] = useState("");
+  const [photoUrls, setPhotoUrls] = useState({ frontPhotoUrl: "", sidePhotoUrl: "", backPhotoUrl: "" });
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!selectedClientId && clients[0]?.id) setSelectedClientId(clients[0].id);
@@ -54,6 +59,7 @@ function MeasurementsPage() {
   );
   const hasValue = Object.values(values).some(Boolean);
   const selectedClient = clients.find((client) => client.id === selectedClientId);
+  const summary = useMemo(() => buildSummary(history), [history]);
 
   function openDatePicker() {
     if (!selectedClientId || saving) return;
@@ -63,32 +69,85 @@ function MeasurementsPage() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selectedClientId || !hasValue) return;
+    if (!selectedClientId || (!hasValue && !trainerNote && !condition && !Object.values(photoUrls).some(Boolean))) return;
 
     const measuredAt = new Date(`${date}T12:00:00.000Z`).toISOString();
+    const duplicate = history.find(
+      (entry) => entry.id !== editingId && entry.measuredAt.slice(0, 10) === date,
+    );
+    if (duplicate && !window.confirm("A measurement already exists for this client/date. Update the existing entry?")) {
+      return;
+    }
     const payload = measurementFields.reduce(
       (next, field) => {
         const value = values[field.key];
         if (value) next[field.key] = Number(value);
         return next;
       },
-      { clientId: selectedClientId, measuredAt } as Record<string, string | number>,
+      {
+        clientId: selectedClientId,
+        measuredAt,
+        trainerNote: trainerNote.trim() || null,
+        condition: condition.trim() || null,
+        frontPhotoUrl: photoUrls.frontPhotoUrl.trim() || null,
+        sidePhotoUrl: photoUrls.sidePhotoUrl.trim() || null,
+        backPhotoUrl: photoUrls.backPhotoUrl.trim() || null,
+      } as Record<string, string | number | null>,
     );
 
     setSaving(true);
     try {
-      await api("/measurements", {
-        method: "POST",
+      await api(editingId ? `/measurements/${editingId}` : "/measurements", {
+        method: editingId ? "PATCH" : "POST",
         body: JSON.stringify(payload),
       });
-      toast.success("Measurements uploaded.");
-      setValues(emptyValues);
-      setDate(new Date().toISOString().slice(0, 10));
+      toast.success(editingId || duplicate ? "Measurement updated." : "Measurements uploaded.");
+      resetForm();
       reload();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to upload measurements.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  function resetForm() {
+    setValues(emptyValues);
+    setTrainerNote("");
+    setCondition("");
+    setPhotoUrls({ frontPhotoUrl: "", sidePhotoUrl: "", backPhotoUrl: "" });
+    setDate(new Date().toISOString().slice(0, 10));
+    setEditingId(null);
+  }
+
+  function editEntry(entry: BodyMeasurementEntry) {
+    setEditingId(entry.id);
+    setDate(entry.measuredAt.slice(0, 10));
+    setValues(
+      measurementFields.reduce(
+        (next, field) => ({ ...next, [field.key]: entry[field.key]?.toString() ?? "" }),
+        {} as Record<MeasurementKey, string>,
+      ),
+    );
+    setTrainerNote(entry.trainerNote ?? "");
+    setCondition(entry.condition ?? "");
+    setPhotoUrls({
+      frontPhotoUrl: entry.frontPhotoUrl ?? "",
+      sidePhotoUrl: entry.sidePhotoUrl ?? "",
+      backPhotoUrl: entry.backPhotoUrl ?? "",
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function deleteEntry(entry: BodyMeasurementEntry) {
+    if (!window.confirm(`Delete measurement from ${formatDate(entry.measuredAt)}?`)) return;
+    try {
+      await api(`/measurements/${entry.id}`, { method: "DELETE" });
+      toast.success("Measurement deleted.");
+      if (editingId === entry.id) resetForm();
+      reload();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to delete measurement.");
     }
   }
 
@@ -129,10 +188,14 @@ function MeasurementsPage() {
         </div>
       </section>
 
+      {selectedClient ? <LatestSummaryCards summary={summary} /> : null}
+      <ProgressChart history={history} />
+
       <section className="rounded-xl border border-border bg-card p-5 shadow-card">
         <div className="mb-5">
           <h2 className="text-lg font-semibold text-foreground">
-            Upload new measurements{selectedClient ? ` for ${selectedClient.name}` : ""}
+            {editingId ? "Edit measurement" : "Upload new measurements"}
+            {selectedClient ? ` for ${selectedClient.name}` : ""}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
             Choose a date for the week, then fill only the values you measured.
@@ -186,14 +249,73 @@ function MeasurementsPage() {
             ))}
           </div>
 
-          <button
-            type="submit"
-            disabled={!selectedClientId || !hasValue || saving}
-            className="mt-5 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-card hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <Save className="h-4 w-4" />
-            {saving ? "Uploading..." : "Upload measurements"}
-          </button>
+          <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_0.8fr]">
+            <label className="text-sm font-medium text-muted-foreground">
+              Trainer note
+              <span className="mt-1.5 flex rounded-lg border border-input bg-background px-3 py-2">
+                <StickyNote className="mr-2 mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <textarea
+                  value={trainerNote}
+                  onChange={(event) => setTrainerNote(event.target.value)}
+                  placeholder="Context, wins, or anything to check next time"
+                  className="min-h-20 flex-1 resize-none bg-transparent text-sm text-foreground outline-none"
+                  disabled={!selectedClientId || saving}
+                />
+              </span>
+            </label>
+            <label className="text-sm font-medium text-muted-foreground">
+              Measurement condition
+              <input
+                value={condition}
+                onChange={(event) => setCondition(event.target.value)}
+                placeholder="Morning, fasted"
+                className="mt-1.5 min-h-11 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none"
+                disabled={!selectedClientId || saving}
+              />
+            </label>
+          </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            {photoFields.map((photo) => (
+              <label key={photo.key} className="text-sm font-medium text-muted-foreground">
+                {photo.label}
+                <span className="mt-1.5 flex items-center rounded-lg border border-input bg-background px-3 py-2">
+                  <Image className="mr-2 h-4 w-4 shrink-0 text-primary" />
+                  <input
+                    type="url"
+                    value={photoUrls[photo.key]}
+                    onChange={(event) =>
+                      setPhotoUrls((current) => ({ ...current, [photo.key]: event.target.value }))
+                    }
+                    placeholder="https://..."
+                    className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none"
+                    disabled={!selectedClientId || saving}
+                  />
+                </span>
+              </label>
+            ))}
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-2">
+            <button
+              type="submit"
+              disabled={!selectedClientId || (!hasValue && !trainerNote && !condition && !Object.values(photoUrls).some(Boolean)) || saving}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-card hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Save className="h-4 w-4" />
+              {saving ? "Saving..." : editingId ? "Save changes" : "Upload measurements"}
+            </button>
+            {editingId ? (
+              <button
+                type="button"
+                onClick={resetForm}
+                className="inline-flex items-center gap-2 rounded-lg border border-input bg-background px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-muted"
+              >
+                <X className="h-4 w-4" />
+                Cancel edit
+              </button>
+            ) : null}
+          </div>
         </form>
       </section>
 
@@ -205,6 +327,8 @@ function MeasurementsPage() {
             ? "No measurements found for the selected week."
             : "No measurements uploaded for this client yet."
         }
+        onEdit={editEntry}
+        onDelete={deleteEntry}
       />
     </div>
   );
@@ -253,14 +377,40 @@ function WeekFilter({ value, onChange }: { value: string; onChange: (value: stri
   );
 }
 
+function LatestSummaryCards({ summary }: { summary: MeasurementSummary }) {
+  const cards = [
+    { label: "Latest weight", value: formatMeasurement(summary.latest?.weight, "kg") },
+    { label: "Latest waist", value: formatMeasurement(summary.latest?.waist, "cm") },
+    { label: "Latest chest", value: formatMeasurement(summary.latest?.chest, "cm") },
+    { label: "Last check-in", value: summary.latest ? formatDate(summary.latest.measuredAt) : "-" },
+    { label: "Days since", value: summary.daysSince === undefined ? "-" : `${summary.daysSince} days` },
+    { label: "Biggest baseline change", value: summary.biggestChange ?? "-" },
+  ];
+
+  return (
+    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+      {cards.map((card) => (
+        <div key={card.label} className="rounded-xl border border-border bg-card p-4 shadow-card">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{card.label}</p>
+          <p className="mt-2 text-lg font-bold text-foreground">{card.value}</p>
+        </div>
+      ))}
+    </section>
+  );
+}
+
 function MeasurementTable({
   rows,
   loading,
   emptyMessage,
+  onEdit,
+  onDelete,
 }: {
   rows: BodyMeasurementEntry[];
   loading: boolean;
   emptyMessage: string;
+  onEdit: (entry: BodyMeasurementEntry) => void;
+  onDelete: (entry: BodyMeasurementEntry) => void;
 }) {
   return (
     <section className="rounded-xl border border-border bg-card p-5 shadow-card">
@@ -286,32 +436,69 @@ function MeasurementTable({
                 <tr>
                   <th className="px-3 py-3 font-semibold">Date</th>
                   <th className="px-3 py-3 font-semibold">Week</th>
+                  <th className="px-3 py-3 font-semibold">Weight change</th>
+                  <th className="px-3 py-3 font-semibold">Waist change</th>
+                  <th className="px-3 py-3 font-semibold">Chest change</th>
+                  <th className="px-3 py-3 font-semibold">Total cm change</th>
                   {measurementFields.map((field) => (
                     <th key={field.key} className="px-3 py-3 font-semibold">
                       {field.label}
                     </th>
                   ))}
+                  <th className="px-3 py-3 font-semibold">Notes</th>
+                  <th className="px-3 py-3 font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border bg-card">
-                {rows.map((row) => (
-                  <tr key={row.id} className="hover:bg-muted/40">
-                    <td className="whitespace-nowrap px-3 py-3 font-medium text-foreground">
-                      {formatDate(row.measuredAt)}
-                    </td>
-                    <td className="whitespace-nowrap px-3 py-3 text-muted-foreground">
-                      {weekLabel(row.measuredAt)}
-                    </td>
-                    {measurementFields.map((field) => (
-                      <td
-                        key={field.key}
-                        className="whitespace-nowrap px-3 py-3 text-muted-foreground"
-                      >
-                        {formatMeasurement(row[field.key], field.unit)}
+                {rows.map((row, index) => {
+                  const previous = rows[index + 1];
+                  const deltas = measurementDeltas(row, previous);
+                  return (
+                    <tr key={row.id} className="hover:bg-muted/40">
+                      <td className="whitespace-nowrap px-3 py-3 font-medium text-foreground">
+                        {formatDate(row.measuredAt)}
                       </td>
-                    ))}
-                  </tr>
-                ))}
+                      <td className="whitespace-nowrap px-3 py-3 text-muted-foreground">
+                        {weekLabel(row.measuredAt)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-3">{formatDelta(deltas.weight, "kg", true)}</td>
+                      <td className="whitespace-nowrap px-3 py-3">{formatDelta(deltas.waist, "cm", true)}</td>
+                      <td className="whitespace-nowrap px-3 py-3">{formatDelta(deltas.chest, "cm", false)}</td>
+                      <td className="whitespace-nowrap px-3 py-3">{formatDelta(deltas.totalCm, "cm", true)}</td>
+                      {measurementFields.map((field) => (
+                        <td
+                          key={field.key}
+                          className="whitespace-nowrap px-3 py-3 text-muted-foreground"
+                        >
+                          {formatMeasurement(row[field.key], field.unit)}
+                        </td>
+                      ))}
+                      <td className="max-w-64 px-3 py-3 text-muted-foreground">
+                        <div className="line-clamp-2">{row.trainerNote || row.condition || "-"}</div>
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-3">
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => onEdit(row)}
+                            className="rounded-md border border-input p-2 text-primary hover:bg-primary/10"
+                            aria-label="Edit measurement"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onDelete(row)}
+                            className="rounded-md border border-input p-2 text-destructive hover:bg-destructive/10"
+                            aria-label="Delete measurement"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -345,6 +532,11 @@ function normalizeMeasurement(row: MeasurementRecord): BodyMeasurementEntry {
     rightCalf: row.rightCalf ?? row.calf,
     weight: row.weight,
     height: row.height,
+    trainerNote: row.trainerNote,
+    condition: row.condition,
+    frontPhotoUrl: row.frontPhotoUrl,
+    sidePhotoUrl: row.sidePhotoUrl,
+    backPhotoUrl: row.backPhotoUrl,
   };
 }
 
@@ -396,3 +588,82 @@ function formatDateInput(value: string) {
     year: "numeric",
   });
 }
+
+type MeasurementSummary = {
+  latest?: BodyMeasurementEntry;
+  daysSince?: number;
+  biggestChange?: string;
+};
+
+function buildSummary(history: BodyMeasurementEntry[]): MeasurementSummary {
+  if (!history.length) return {};
+  const latest = history[0];
+  const baseline = history.at(-1);
+  const daysSince = Math.max(
+    0,
+    Math.floor((Date.now() - new Date(latest.measuredAt).getTime()) / 86400000),
+  );
+  const changes = [
+    metricChange("Weight", latest.weight, baseline?.weight, "kg"),
+    metricChange("Waist", latest.waist, baseline?.waist, "cm"),
+    metricChange("Chest", latest.chest, baseline?.chest, "cm"),
+    metricChange("Hip", latest.hip, baseline?.hip, "cm"),
+  ].filter(Boolean) as string[];
+  return { latest, daysSince, biggestChange: changes[0] };
+}
+
+function metricChange(label: string, latest?: number, baseline?: number, unit = "") {
+  if (typeof latest !== "number" || typeof baseline !== "number") return undefined;
+  const change = latest - baseline;
+  return `${label} ${change > 0 ? "+" : ""}${change.toFixed(1)} ${unit}`;
+}
+
+function measurementDeltas(current: BodyMeasurementEntry, previous?: BodyMeasurementEntry) {
+  const bodyKeys: MeasurementKey[] = [
+    "waist",
+    "chest",
+    "hip",
+    "leftBicep",
+    "rightBicep",
+    "leftForearm",
+    "rightForearm",
+    "upperBelly",
+    "lowerBelly",
+    "leftThigh",
+    "rightThigh",
+    "leftCalf",
+    "rightCalf",
+  ];
+  return {
+    weight: delta(current.weight, previous?.weight),
+    waist: delta(current.waist, previous?.waist),
+    chest: delta(current.chest, previous?.chest),
+    totalCm: bodyKeys.reduce((total, key) => total + (delta(current[key], previous?.[key]) ?? 0), 0),
+  };
+}
+
+function delta(current?: number, previous?: number) {
+  if (typeof current !== "number" || typeof previous !== "number") return undefined;
+  return current - previous;
+}
+
+function formatDelta(value: number | undefined, unit: string, lowerIsGood: boolean) {
+  if (typeof value !== "number") return <span className="text-muted-foreground">Baseline</span>;
+  const good = lowerIsGood ? value <= 0 : value >= 0;
+  return (
+    <span
+      className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+        good ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600"
+      }`}
+    >
+      {value > 0 ? "+" : ""}
+      {value.toFixed(1)} {unit}
+    </span>
+  );
+}
+
+const photoFields = [
+  { key: "frontPhotoUrl", label: "Front photo URL" },
+  { key: "sidePhotoUrl", label: "Side photo URL" },
+  { key: "backPhotoUrl", label: "Back photo URL" },
+] as const;

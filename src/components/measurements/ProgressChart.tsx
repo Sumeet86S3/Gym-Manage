@@ -10,6 +10,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { useMemo, useState } from "react";
 import type { BodyMeasurementEntry } from "./types";
 
 interface ProgressChartProps {
@@ -17,7 +18,12 @@ interface ProgressChartProps {
 }
 
 export function ProgressChart({ history }: ProgressChartProps) {
-  const chartData = history.map((entry) => ({
+  const [metric, setMetric] = useState<"weight" | "waist" | "chest" | "hip">("weight");
+  const ascending = useMemo(
+    () => [...history].sort((a, b) => new Date(a.measuredAt).getTime() - new Date(b.measuredAt).getTime()),
+    [history],
+  );
+  const chartData = ascending.map((entry) => ({
     date: new Date(entry.measuredAt).toLocaleDateString("en-IN", {
       month: "short",
       day: "numeric",
@@ -27,8 +33,8 @@ export function ProgressChart({ history }: ProgressChartProps) {
     chest: entry.chest,
     hip: entry.hip,
   }));
-  const first = history[0];
-  const latest = history.at(-1);
+  const first = ascending[0];
+  const latest = ascending.at(-1);
   const comparison = [
     { metric: "Weight", start: first?.weight ?? 0, latest: latest?.weight ?? 0 },
     { metric: "Waist", start: first?.waist ?? 0, latest: latest?.waist ?? 0 },
@@ -56,7 +62,23 @@ export function ProgressChart({ history }: ProgressChartProps) {
           </p>
           <h3 className="mt-1 text-xl font-semibold text-foreground">Transformation trends</h3>
         </div>
-        <p className="text-sm text-muted-foreground">{history.length} check-ins tracked</p>
+        <div className="flex flex-wrap items-center gap-2">
+          {metricOptions.map((option) => (
+            <button
+              key={option.key}
+              type="button"
+              onClick={() => setMetric(option.key)}
+              className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                metric === option.key
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+          <span className="text-sm text-muted-foreground">{history.length} check-ins</span>
+        </div>
       </div>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[1.4fr_1fr]">
@@ -91,27 +113,11 @@ export function ProgressChart({ history }: ProgressChartProps) {
               <Legend />
               <Area
                 type="monotone"
-                dataKey="weight"
-                name="Weight kg"
+                dataKey={metric}
+                name={metricOptions.find((option) => option.key === metric)?.name}
                 stroke="var(--color-primary)"
                 strokeWidth={2.5}
                 fill="url(#weightTrend)"
-              />
-              <Area
-                type="monotone"
-                dataKey="waist"
-                name="Waist cm"
-                stroke="var(--color-accent)"
-                strokeWidth={2.5}
-                fill="url(#waistTrend)"
-              />
-              <Area
-                type="monotone"
-                dataKey="chest"
-                name="Chest cm"
-                stroke="var(--color-info)"
-                strokeWidth={2.5}
-                fill="transparent"
               />
             </AreaChart>
           </ResponsiveContainer>
@@ -162,3 +168,10 @@ const tooltipStyle = {
   background: "var(--color-popover)",
   boxShadow: "0 18px 45px rgb(15 23 42 / 0.16)",
 };
+
+const metricOptions = [
+  { key: "weight", label: "Weight", name: "Weight kg" },
+  { key: "waist", label: "Waist", name: "Waist cm" },
+  { key: "chest", label: "Chest", name: "Chest cm" },
+  { key: "hip", label: "Hip", name: "Hip cm" },
+] as const;

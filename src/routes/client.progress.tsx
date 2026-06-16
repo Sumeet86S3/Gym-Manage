@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { CalendarDays, Lock } from "lucide-react";
+import { CalendarDays, Image, Lock, TrendingUp } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { PageHeader } from "@/components/app-shell";
+import { ProgressChart } from "@/components/measurements/ProgressChart";
 import { measurementFields, type BodyMeasurementEntry } from "@/components/measurements/types";
 import { useApiResource } from "@/hooks/use-api-resource";
 import type { MeasurementRecord } from "@/lib/live-data";
@@ -21,6 +22,7 @@ function ProgressPage() {
         : history,
     [history, selectedWeek],
   );
+  const summary = useMemo(() => buildSummary(history), [history]);
 
   return (
     <div className="space-y-6">
@@ -45,6 +47,9 @@ function ProgressPage() {
         </div>
       </section>
 
+      <ClientSummary summary={summary} />
+      <ProgressChart history={history} />
+
       <MeasurementTable
         rows={filteredHistory}
         loading={loading}
@@ -55,6 +60,29 @@ function ProgressPage() {
         }
       />
     </div>
+  );
+}
+
+function ClientSummary({ summary }: { summary: MeasurementSummary }) {
+  const cards = [
+    { label: "Since start", value: summary.sinceStart ?? "Progress starts with your first check-in" },
+    { label: "Latest weight", value: formatMeasurement(summary.latest?.weight, "kg") },
+    { label: "Latest waist", value: formatMeasurement(summary.latest?.waist, "cm") },
+    { label: "Latest chest", value: formatMeasurement(summary.latest?.chest, "cm") },
+  ];
+
+  return (
+    <section className="grid gap-3 md:grid-cols-4">
+      {cards.map((card) => (
+        <div key={card.label} className="rounded-xl border border-border bg-card p-4 shadow-card">
+          <div className="flex items-center gap-2 text-primary">
+            <TrendingUp className="h-4 w-4" />
+            <p className="text-xs font-semibold uppercase tracking-wide">{card.label}</p>
+          </div>
+          <p className="mt-2 text-lg font-bold text-foreground">{card.value}</p>
+        </div>
+      ))}
+    </section>
   );
 }
 
@@ -122,32 +150,54 @@ function MeasurementTable({
                 <tr>
                   <th className="px-3 py-3 font-semibold">Date</th>
                   <th className="px-3 py-3 font-semibold">Week</th>
+                  <th className="px-3 py-3 font-semibold">Weight change</th>
+                  <th className="px-3 py-3 font-semibold">Waist change</th>
+                  <th className="px-3 py-3 font-semibold">Total cm change</th>
                   {measurementFields.map((field) => (
                     <th key={field.key} className="px-3 py-3 font-semibold">
                       {field.label}
                     </th>
                   ))}
+                  <th className="px-3 py-3 font-semibold">Notes</th>
+                  <th className="px-3 py-3 font-semibold">Photos</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border bg-card">
-                {rows.map((row) => (
-                  <tr key={row.id} className="hover:bg-muted/40">
-                    <td className="whitespace-nowrap px-3 py-3 font-medium text-foreground">
-                      {formatDate(row.measuredAt)}
-                    </td>
-                    <td className="whitespace-nowrap px-3 py-3 text-muted-foreground">
-                      {weekLabel(row.measuredAt)}
-                    </td>
-                    {measurementFields.map((field) => (
-                      <td
-                        key={field.key}
-                        className="whitespace-nowrap px-3 py-3 text-muted-foreground"
-                      >
-                        {formatMeasurement(row[field.key], field.unit)}
+                {rows.map((row, index) => {
+                  const previous = rows[index + 1];
+                  const deltas = measurementDeltas(row, previous);
+                  const photoCount = [row.frontPhotoUrl, row.sidePhotoUrl, row.backPhotoUrl].filter(Boolean).length;
+                  return (
+                    <tr key={row.id} className="hover:bg-muted/40">
+                      <td className="whitespace-nowrap px-3 py-3 font-medium text-foreground">
+                        {formatDate(row.measuredAt)}
                       </td>
-                    ))}
-                  </tr>
-                ))}
+                      <td className="whitespace-nowrap px-3 py-3 text-muted-foreground">
+                        {weekLabel(row.measuredAt)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-3">{formatDelta(deltas.weight, "kg", true)}</td>
+                      <td className="whitespace-nowrap px-3 py-3">{formatDelta(deltas.waist, "cm", true)}</td>
+                      <td className="whitespace-nowrap px-3 py-3">{formatDelta(deltas.totalCm, "cm", true)}</td>
+                      {measurementFields.map((field) => (
+                        <td
+                          key={field.key}
+                          className="whitespace-nowrap px-3 py-3 text-muted-foreground"
+                        >
+                          {formatMeasurement(row[field.key], field.unit)}
+                        </td>
+                      ))}
+                      <td className="max-w-64 px-3 py-3 text-muted-foreground">
+                        <div className="line-clamp-2">{row.trainerNote || row.condition || "-"}</div>
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-3 text-muted-foreground">
+                        <span className="inline-flex items-center gap-1">
+                          <Image className="h-4 w-4" />
+                          {photoCount || "-"}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -181,6 +231,11 @@ function normalizeMeasurement(row: MeasurementRecord): BodyMeasurementEntry {
     rightCalf: row.rightCalf ?? row.calf,
     weight: row.weight,
     height: row.height,
+    trainerNote: row.trainerNote,
+    condition: row.condition,
+    frontPhotoUrl: row.frontPhotoUrl,
+    sidePhotoUrl: row.sidePhotoUrl,
+    backPhotoUrl: row.backPhotoUrl,
   };
 }
 
@@ -220,4 +275,63 @@ function formatWeekInput(value: string) {
   const [year, week] = value.split("-W");
   if (!year || !week) return value;
   return `Week ${Number(week)}, ${year}`;
+}
+
+type MeasurementSummary = {
+  latest?: BodyMeasurementEntry;
+  sinceStart?: string;
+};
+
+function buildSummary(history: BodyMeasurementEntry[]): MeasurementSummary {
+  if (!history.length) return {};
+  const latest = history[0];
+  const baseline = history.at(-1);
+  const changes = [
+    metricChange("Weight", latest.weight, baseline?.weight, "kg", true),
+    metricChange("Waist", latest.waist, baseline?.waist, "cm", true),
+    metricChange("Chest", latest.chest, baseline?.chest, "cm", false),
+  ].filter(Boolean);
+  return {
+    latest,
+    sinceStart: changes.length ? changes.join(" · ") : "Keep checking in to see your trend",
+  };
+}
+
+function metricChange(label: string, latest?: number, baseline?: number, unit = "", lowerIsGood = false) {
+  if (typeof latest !== "number" || typeof baseline !== "number") return undefined;
+  const change = latest - baseline;
+  const direction = change === 0 ? "steady" : lowerIsGood && change < 0 ? "down" : change > 0 ? "up" : "down";
+  return `${label} ${direction} ${Math.abs(change).toFixed(1)} ${unit}`;
+}
+
+function measurementDeltas(current: BodyMeasurementEntry, previous?: BodyMeasurementEntry) {
+  if (!previous) return { weight: undefined, waist: undefined, totalCm: undefined };
+  const bodyKeys = measurementFields
+    .filter((field) => field.unit === "cm" && field.key !== "height")
+    .map((field) => field.key);
+  return {
+    weight: delta(current.weight, previous.weight),
+    waist: delta(current.waist, previous.waist),
+    totalCm: bodyKeys.reduce((total, key) => total + (delta(current[key], previous[key]) ?? 0), 0),
+  };
+}
+
+function delta(current?: number, previous?: number) {
+  if (typeof current !== "number" || typeof previous !== "number") return undefined;
+  return current - previous;
+}
+
+function formatDelta(value: number | undefined, unit: string, lowerIsGood: boolean) {
+  if (typeof value !== "number") return <span className="text-muted-foreground">Start</span>;
+  const good = lowerIsGood ? value <= 0 : value >= 0;
+  return (
+    <span
+      className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+        good ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600"
+      }`}
+    >
+      {value > 0 ? "+" : ""}
+      {value.toFixed(1)} {unit}
+    </span>
+  );
 }

@@ -44,6 +44,11 @@ export interface MeasurementRecord {
   leftCalf?: number;
   rightCalf?: number;
   measuredAt: string;
+  trainerNote?: string | null;
+  condition?: string | null;
+  frontPhotoUrl?: string | null;
+  sidePhotoUrl?: string | null;
+  backPhotoUrl?: string | null;
 }
 
 export interface GoalRecord {

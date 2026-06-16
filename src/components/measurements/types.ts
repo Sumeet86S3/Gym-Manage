@@ -45,6 +45,11 @@ export interface BodyMeasurementEntry {
   rightCalf?: number;
   weight?: number;
   height?: number;
+  trainerNote?: string | null;
+  condition?: string | null;
+  frontPhotoUrl?: string | null;
+  sidePhotoUrl?: string | null;
+  backPhotoUrl?: string | null;
 }
 
 export interface ClientMeasurementOption extends Client {
