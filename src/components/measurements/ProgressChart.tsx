@@ -1,8 +1,6 @@
 import {
   Area,
   AreaChart,
-  Bar,
-  BarChart,
   CartesianGrid,
   Legend,
   ResponsiveContainer,
@@ -35,12 +33,10 @@ export function ProgressChart({ history }: ProgressChartProps) {
   }));
   const first = ascending[0];
   const latest = ascending.at(-1);
-  const comparison = [
-    { metric: "Weight", start: first?.weight ?? 0, latest: latest?.weight ?? 0 },
-    { metric: "Waist", start: first?.waist ?? 0, latest: latest?.waist ?? 0 },
-    { metric: "Chest", start: first?.chest ?? 0, latest: latest?.chest ?? 0 },
-    { metric: "Hip", start: first?.hip ?? 0, latest: latest?.hip ?? 0 },
-  ];
+  const change =
+    typeof first?.[metric] === "number" && typeof latest?.[metric] === "number"
+      ? latest[metric]! - first[metric]!
+      : undefined;
 
   if (!history.length) {
     return (
@@ -81,8 +77,17 @@ export function ProgressChart({ history }: ProgressChartProps) {
         </div>
       </div>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-[1.4fr_1fr]">
-        <div className="h-80 rounded-xl border border-border bg-background/70 p-3">
+      <div className="mt-5 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+        <span>From first to latest:</span>
+        <span className="rounded-full bg-muted px-3 py-1 font-semibold text-foreground">
+          {typeof change === "number" ? `${change > 0 ? "+" : ""}${change.toFixed(1)}` : "-"}
+          {" "}
+          {metric === "weight" ? "kg" : "cm"}
+        </span>
+      </div>
+
+      <div className="mt-4">
+        <div className="h-72 rounded-xl border border-border bg-background/70 p-3">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartData} margin={{ top: 12, right: 18, left: -18, bottom: 0 }}>
               <defs>
@@ -120,41 +125,6 @@ export function ProgressChart({ history }: ProgressChartProps) {
                 fill="url(#weightTrend)"
               />
             </AreaChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="h-80 rounded-xl border border-border bg-background/70 p-3">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={comparison} margin={{ top: 12, right: 12, left: -18, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
-              <XAxis
-                dataKey="metric"
-                stroke="var(--color-muted-foreground)"
-                fontSize={12}
-                tickLine={false}
-                axisLine={false}
-              />
-              <YAxis
-                stroke="var(--color-muted-foreground)"
-                fontSize={12}
-                tickLine={false}
-                axisLine={false}
-              />
-              <Tooltip contentStyle={tooltipStyle} />
-              <Legend />
-              <Bar
-                dataKey="start"
-                name="Start"
-                fill="var(--color-muted-foreground)"
-                radius={[8, 8, 0, 0]}
-              />
-              <Bar
-                dataKey="latest"
-                name="Latest"
-                fill="var(--color-primary)"
-                radius={[8, 8, 0, 0]}
-              />
-            </BarChart>
           </ResponsiveContainer>
         </div>
       </div>

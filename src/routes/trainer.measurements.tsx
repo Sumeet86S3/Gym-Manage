@@ -22,6 +22,13 @@ const emptyValues = measurementFields.reduce(
   (values, field) => ({ ...values, [field.key]: "" }),
   {} as Record<MeasurementKey, string>,
 );
+const primaryMeasurementKeys: MeasurementKey[] = ["weight", "waist", "chest", "hip", "height"];
+const primaryFields = primaryMeasurementKeys
+  .map((key) => measurementFields.find((field) => field.key === key))
+  .filter(Boolean) as typeof measurementFields;
+const advancedFields = measurementFields.filter(
+  (field) => !primaryMeasurementKeys.includes(field.key),
+);
 
 function MeasurementsPage() {
   const { data: clients, loading: clientsLoading } = useApiResource<Client[]>("/clients", []);
@@ -224,8 +231,8 @@ function MeasurementsPage() {
             </span>
           </label>
 
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {measurementFields.map((field) => (
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            {primaryFields.map((field) => (
               <label key={field.key} className="text-sm font-medium text-muted-foreground">
                 {field.label}
                 <span className="mt-1.5 flex items-center rounded-lg border border-input bg-background px-3 py-2">
@@ -249,52 +256,82 @@ function MeasurementsPage() {
             ))}
           </div>
 
-          <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_0.8fr]">
-            <label className="text-sm font-medium text-muted-foreground">
-              Trainer note
-              <span className="mt-1.5 flex rounded-lg border border-input bg-background px-3 py-2">
-                <StickyNote className="mr-2 mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                <textarea
-                  value={trainerNote}
-                  onChange={(event) => setTrainerNote(event.target.value)}
-                  placeholder="Context, wins, or anything to check next time"
-                  className="min-h-20 flex-1 resize-none bg-transparent text-sm text-foreground outline-none"
-                  disabled={!selectedClientId || saving}
-                />
-              </span>
-            </label>
-            <label className="text-sm font-medium text-muted-foreground">
-              Measurement condition
-              <input
-                value={condition}
-                onChange={(event) => setCondition(event.target.value)}
-                placeholder="Morning, fasted"
-                className="mt-1.5 min-h-11 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none"
-                disabled={!selectedClientId || saving}
-              />
-            </label>
-          </div>
+          <details className="mt-4 rounded-lg border border-border bg-muted/30 p-4">
+            <summary className="cursor-pointer text-sm font-semibold text-foreground">
+              More details
+            </summary>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {advancedFields.map((field) => (
+                <label key={field.key} className="text-sm font-medium text-muted-foreground">
+                  {field.label}
+                  <span className="mt-1.5 flex items-center rounded-lg border border-input bg-background px-3 py-2">
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      value={values[field.key]}
+                      onChange={(event) =>
+                        setValues((current) => ({ ...current, [field.key]: event.target.value }))
+                      }
+                      placeholder={field.placeholder}
+                      className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none"
+                      disabled={!selectedClientId || saving}
+                    />
+                    <span className="ml-2 text-xs font-semibold text-muted-foreground">
+                      {field.unit}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
 
-          <div className="mt-4 grid gap-3 md:grid-cols-3">
-            {photoFields.map((photo) => (
-              <label key={photo.key} className="text-sm font-medium text-muted-foreground">
-                {photo.label}
-                <span className="mt-1.5 flex items-center rounded-lg border border-input bg-background px-3 py-2">
-                  <Image className="mr-2 h-4 w-4 shrink-0 text-primary" />
-                  <input
-                    type="url"
-                    value={photoUrls[photo.key]}
-                    onChange={(event) =>
-                      setPhotoUrls((current) => ({ ...current, [photo.key]: event.target.value }))
-                    }
-                    placeholder="https://..."
-                    className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none"
+            <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_0.8fr]">
+              <label className="text-sm font-medium text-muted-foreground">
+                Trainer note
+                <span className="mt-1.5 flex rounded-lg border border-input bg-background px-3 py-2">
+                  <StickyNote className="mr-2 mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                  <textarea
+                    value={trainerNote}
+                    onChange={(event) => setTrainerNote(event.target.value)}
+                    placeholder="Context, wins, or anything to check next time"
+                    className="min-h-20 flex-1 resize-none bg-transparent text-sm text-foreground outline-none"
                     disabled={!selectedClientId || saving}
                   />
                 </span>
               </label>
-            ))}
-          </div>
+              <label className="text-sm font-medium text-muted-foreground">
+                Measurement condition
+                <input
+                  value={condition}
+                  onChange={(event) => setCondition(event.target.value)}
+                  placeholder="Morning, fasted"
+                  className="mt-1.5 min-h-11 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none"
+                  disabled={!selectedClientId || saving}
+                />
+              </label>
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              {photoFields.map((photo) => (
+                <label key={photo.key} className="text-sm font-medium text-muted-foreground">
+                  {photo.label}
+                  <span className="mt-1.5 flex items-center rounded-lg border border-input bg-background px-3 py-2">
+                    <Image className="mr-2 h-4 w-4 shrink-0 text-primary" />
+                    <input
+                      type="url"
+                      value={photoUrls[photo.key]}
+                      onChange={(event) =>
+                        setPhotoUrls((current) => ({ ...current, [photo.key]: event.target.value }))
+                      }
+                      placeholder="https://..."
+                      className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none"
+                      disabled={!selectedClientId || saving}
+                    />
+                  </span>
+                </label>
+              ))}
+            </div>
+          </details>
 
           <div className="mt-5 flex flex-wrap gap-2">
             <button
@@ -383,12 +420,10 @@ function LatestSummaryCards({ summary }: { summary: MeasurementSummary }) {
     { label: "Latest waist", value: formatMeasurement(summary.latest?.waist, "cm") },
     { label: "Latest chest", value: formatMeasurement(summary.latest?.chest, "cm") },
     { label: "Last check-in", value: summary.latest ? formatDate(summary.latest.measuredAt) : "-" },
-    { label: "Days since", value: summary.daysSince === undefined ? "-" : `${summary.daysSince} days` },
-    { label: "Biggest baseline change", value: summary.biggestChange ?? "-" },
   ];
 
   return (
-    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       {cards.map((card) => (
         <div key={card.label} className="rounded-xl border border-border bg-card p-4 shadow-card">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{card.label}</p>
@@ -418,7 +453,7 @@ function MeasurementTable({
         <div>
           <h2 className="text-lg font-semibold text-foreground">Measurement history</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Date and week wise entries in a simple table.
+            Key entries with changes from the previous check-in.
           </p>
         </div>
         <span className="rounded-full bg-muted px-3 py-1 text-xs font-semibold text-muted-foreground">
@@ -431,16 +466,14 @@ function MeasurementTable({
       ) : rows.length ? (
         <div className="overflow-hidden rounded-lg border border-border">
           <div className="max-h-[560px] overflow-auto">
-            <table className="w-full min-w-[1500px] text-left text-sm">
+            <table className="w-full min-w-[920px] text-left text-sm">
               <thead className="sticky top-0 z-10 bg-muted text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="px-3 py-3 font-semibold">Date</th>
-                  <th className="px-3 py-3 font-semibold">Week</th>
                   <th className="px-3 py-3 font-semibold">Weight change</th>
                   <th className="px-3 py-3 font-semibold">Waist change</th>
-                  <th className="px-3 py-3 font-semibold">Chest change</th>
                   <th className="px-3 py-3 font-semibold">Total cm change</th>
-                  {measurementFields.map((field) => (
+                  {primaryFields.slice(0, 4).map((field) => (
                     <th key={field.key} className="px-3 py-3 font-semibold">
                       {field.label}
                     </th>
@@ -458,14 +491,10 @@ function MeasurementTable({
                       <td className="whitespace-nowrap px-3 py-3 font-medium text-foreground">
                         {formatDate(row.measuredAt)}
                       </td>
-                      <td className="whitespace-nowrap px-3 py-3 text-muted-foreground">
-                        {weekLabel(row.measuredAt)}
-                      </td>
                       <td className="whitespace-nowrap px-3 py-3">{formatDelta(deltas.weight, "kg", true)}</td>
                       <td className="whitespace-nowrap px-3 py-3">{formatDelta(deltas.waist, "cm", true)}</td>
-                      <td className="whitespace-nowrap px-3 py-3">{formatDelta(deltas.chest, "cm", false)}</td>
                       <td className="whitespace-nowrap px-3 py-3">{formatDelta(deltas.totalCm, "cm", true)}</td>
-                      {measurementFields.map((field) => (
+                      {primaryFields.slice(0, 4).map((field) => (
                         <td
                           key={field.key}
                           className="whitespace-nowrap px-3 py-3 text-muted-foreground"

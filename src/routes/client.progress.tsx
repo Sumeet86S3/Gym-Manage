@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { CalendarDays, Image, Lock, TrendingUp } from "lucide-react";
+import { CalendarDays, Lock, TrendingUp } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { PageHeader } from "@/components/app-shell";
 import { ProgressChart } from "@/components/measurements/ProgressChart";
@@ -10,6 +10,11 @@ import type { MeasurementRecord } from "@/lib/live-data";
 export const Route = createFileRoute("/client/progress")({
   component: ProgressPage,
 });
+
+const primaryMeasurementKeys = ["weight", "waist", "chest", "hip"] as const;
+const primaryFields = primaryMeasurementKeys
+  .map((key) => measurementFields.find((field) => field.key === key))
+  .filter(Boolean) as typeof measurementFields;
 
 function ProgressPage() {
   const { data: rows, loading } = useApiResource<MeasurementRecord[]>("/measurements", []);
@@ -38,9 +43,9 @@ function ProgressPage() {
               <Lock className="h-3.5 w-3.5" />
               Your data only
             </span>
-            <h2 className="mt-3 text-lg font-semibold text-foreground">Measurement history</h2>
+            <h2 className="mt-3 text-lg font-semibold text-foreground">Progress snapshot</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Check your entries by date or filter them week wise.
+              Follow the key numbers and open the table when you want the details.
             </p>
           </div>
           <WeekFilter value={selectedWeek} onChange={setSelectedWeek} />
@@ -145,40 +150,34 @@ function MeasurementTable({
       ) : rows.length ? (
         <div className="overflow-hidden rounded-lg border border-border">
           <div className="max-h-[620px] overflow-auto">
-            <table className="w-full min-w-[1500px] text-left text-sm">
+            <table className="w-full min-w-[820px] text-left text-sm">
               <thead className="sticky top-0 z-10 bg-muted text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="px-3 py-3 font-semibold">Date</th>
-                  <th className="px-3 py-3 font-semibold">Week</th>
                   <th className="px-3 py-3 font-semibold">Weight change</th>
                   <th className="px-3 py-3 font-semibold">Waist change</th>
                   <th className="px-3 py-3 font-semibold">Total cm change</th>
-                  {measurementFields.map((field) => (
+                  {primaryFields.map((field) => (
                     <th key={field.key} className="px-3 py-3 font-semibold">
                       {field.label}
                     </th>
                   ))}
                   <th className="px-3 py-3 font-semibold">Notes</th>
-                  <th className="px-3 py-3 font-semibold">Photos</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border bg-card">
                 {rows.map((row, index) => {
                   const previous = rows[index + 1];
                   const deltas = measurementDeltas(row, previous);
-                  const photoCount = [row.frontPhotoUrl, row.sidePhotoUrl, row.backPhotoUrl].filter(Boolean).length;
                   return (
                     <tr key={row.id} className="hover:bg-muted/40">
                       <td className="whitespace-nowrap px-3 py-3 font-medium text-foreground">
                         {formatDate(row.measuredAt)}
                       </td>
-                      <td className="whitespace-nowrap px-3 py-3 text-muted-foreground">
-                        {weekLabel(row.measuredAt)}
-                      </td>
                       <td className="whitespace-nowrap px-3 py-3">{formatDelta(deltas.weight, "kg", true)}</td>
                       <td className="whitespace-nowrap px-3 py-3">{formatDelta(deltas.waist, "cm", true)}</td>
                       <td className="whitespace-nowrap px-3 py-3">{formatDelta(deltas.totalCm, "cm", true)}</td>
-                      {measurementFields.map((field) => (
+                      {primaryFields.map((field) => (
                         <td
                           key={field.key}
                           className="whitespace-nowrap px-3 py-3 text-muted-foreground"
@@ -188,12 +187,6 @@ function MeasurementTable({
                       ))}
                       <td className="max-w-64 px-3 py-3 text-muted-foreground">
                         <div className="line-clamp-2">{row.trainerNote || row.condition || "-"}</div>
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-3 text-muted-foreground">
-                        <span className="inline-flex items-center gap-1">
-                          <Image className="h-4 w-4" />
-                          {photoCount || "-"}
-                        </span>
                       </td>
                     </tr>
                   );
