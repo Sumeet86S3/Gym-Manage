@@ -99,24 +99,7 @@ export async function create(user, input) {
 export async function clearForClient(user, input) {
   if (user.role !== "trainer") throw new AppError("Only trainers can clear client meals", 403);
 
-  const trainer = await trainerForUser(user);
-  const [client] = await db
-    .select({
-      id: clients.id,
-      name: clients.name,
-    })
-    .from(clients)
-    .where(
-      and(
-        eq(clients.id, input.clientId),
-        eq(clients.trainerId, trainer.id),
-        isNull(clients.deletedAt),
-      ),
-    )
-    .limit(1);
-
-  if (!client) throw new AppError("Client not found", 404);
-
+  const client = await trainerClientForMealClearance(user, input.clientId);
   const now = new Date();
   const clearedThrough = dateKey(now);
   const rowsToDelete = await db
@@ -146,6 +129,22 @@ export async function clearForClient(user, input) {
       ),
     );
 
+  return {
+    clientId: client.id,
+    clientName: client.name,
+    clearedThrough,
+    deletedMealUpdates: rowsToDelete.length,
+    deletedImagekitFiles,
+  };
+}
+
+export async function clearMissedForClient(user, input) {
+  if (user.role !== "trainer") throw new AppError("Only trainers can clear missed meals", 403);
+
+  const client = await trainerClientForMealClearance(user, input.clientId);
+  const now = new Date();
+  const clearedThrough = dateKey(now);
+
   await db
     .insert(mealClearances)
     .values({
@@ -167,8 +166,6 @@ export async function clearForClient(user, input) {
     clientId: client.id,
     clientName: client.name,
     clearedThrough,
-    deletedMealUpdates: rowsToDelete.length,
-    deletedImagekitFiles,
   };
 }
 
@@ -244,6 +241,23 @@ export async function missedSummary(user) {
     totalMissed: clientSummaries.reduce((total, client) => total + client.missedCount, 0),
     clients: clientSummaries,
   };
+}
+
+async function trainerClientForMealClearance(user, clientId) {
+  const trainer = await trainerForUser(user);
+  const [client] = await db
+    .select({
+      id: clients.id,
+      name: clients.name,
+    })
+    .from(clients)
+    .where(
+      and(eq(clients.id, clientId), eq(clients.trainerId, trainer.id), isNull(clients.deletedAt)),
+    )
+    .limit(1);
+
+  if (!client) throw new AppError("Client not found", 404);
+  return client;
 }
 
 async function clientsForMealSummary(user) {

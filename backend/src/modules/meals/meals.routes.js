@@ -15,6 +15,12 @@ mealRoutes.delete(
   validate(clearMealsSchema),
   controller.clearForClient,
 );
+mealRoutes.delete(
+  "/missed/clear",
+  authorize("trainer"),
+  validate(clearMealsSchema),
+  controller.clearMissedForClient,
+);
 mealRoutes.get(
   "/",
   authorize("admin", "trainer", "client"),

@@ -5,6 +5,7 @@ import {
   AlertCircle,
   CalendarDays,
   Clock,
+  Eraser,
   Filter,
   LoaderCircle,
   RefreshCw,
@@ -44,6 +45,7 @@ export const Route = createFileRoute("/trainer/meals")({
 
 type RangeFilter = "today" | "week" | "date" | "all";
 type TypeFilter = MealType | "all";
+type ClearAction = "meals" | "missed";
 type ApiMealEntry = MealEntry & { imageUrl?: string; loggedAt?: string };
 type MealPage = {
   items: ApiMealEntry[];
@@ -69,8 +71,8 @@ function TrainerMealsPage() {
   const [range, setRange] = useState<RangeFilter>("today");
   const [selectedDate, setSelectedDate] = useState(todayInputValue);
   const [selectedClientId, setSelectedClientId] = useState("all");
-  const [clearDialogOpen, setClearDialogOpen] = useState(false);
-  const [clearingMeals, setClearingMeals] = useState(false);
+  const [clearAction, setClearAction] = useState<ClearAction | null>(null);
+  const [clearingAction, setClearingAction] = useState<ClearAction | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const queryParams = useMemo(() => {
     const params = new URLSearchParams({ type, range });
@@ -138,10 +140,18 @@ function TrainerMealsPage() {
     () => clients.find((client) => client.id === selectedClientId) ?? null,
     [clients, selectedClientId],
   );
+  const selectedClientMissedCount =
+    missedMeals.clients.find((client) => client.clientId === selectedClientId)?.missedCount ?? 0;
+  const isClearing = clearingAction !== null;
+
+  const openClearDialog = (action: ClearAction) => {
+    if (!selectedClient) return;
+    setClearAction(action);
+  };
 
   const clearSelectedClientMeals = async () => {
     if (!selectedClient) return;
-    setClearingMeals(true);
+    setClearingAction("meals");
     try {
       const result = await api<{
         clientName: string;
@@ -151,10 +161,7 @@ function TrainerMealsPage() {
         method: "DELETE",
         body: JSON.stringify({ clientId: selectedClient.id }),
       });
-      await Promise.all([
-        refetch(),
-        queryClient.invalidateQueries({ queryKey: ["api", "/meals/missed"] }),
-      ]);
+      await refetch();
       toast.success("Meal history cleared.", {
         description: `${result.deletedMealUpdates} meal update${
           result.deletedMealUpdates === 1 ? "" : "s"
@@ -162,13 +169,59 @@ function TrainerMealsPage() {
           result.deletedImagekitFiles === 1 ? "" : "s"
         } removed for ${result.clientName}.`,
       });
-      setClearDialogOpen(false);
+      setClearAction(null);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to clear meal history.");
     } finally {
-      setClearingMeals(false);
+      setClearingAction(null);
     }
   };
+
+  const clearSelectedClientMissedMeals = async () => {
+    if (!selectedClient) return;
+    setClearingAction("missed");
+    try {
+      const result = await api<{
+        clientName: string;
+        clearedThrough: string;
+      }>("/meals/missed/clear", {
+        method: "DELETE",
+        body: JSON.stringify({ clientId: selectedClient.id }),
+      });
+      await queryClient.invalidateQueries({ queryKey: ["api", "/meals/missed"] });
+      toast.success("Missed updates cleared.", {
+        description: `Missed meal updates cleared through ${formatDateLabel(
+          result.clearedThrough,
+        )} for ${result.clientName}.`,
+      });
+      setClearAction(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to clear missed updates.");
+    } finally {
+      setClearingAction(null);
+    }
+  };
+
+  const confirmClearAction =
+    clearAction === "meals" ? clearSelectedClientMeals : clearSelectedClientMissedMeals;
+  const clearDialogTitle =
+    clearAction === "meals" ? "Clear meal updates?" : "Clear missed updates?";
+  const clearDialogDescription =
+    clearAction === "meals"
+      ? `This permanently deletes all meal updates for ${
+          selectedClient?.name ?? "the selected client"
+        } through today.`
+      : `This clears missed meal updates for ${
+          selectedClient?.name ?? "the selected client"
+        } through today without deleting uploaded meals.`;
+  const clearDialogButton =
+    clearAction === "meals"
+      ? clearingAction === "meals"
+        ? "Clearing..."
+        : "Clear meal updates"
+      : clearingAction === "missed"
+        ? "Clearing..."
+        : "Clear missed updates";
 
   const typeChips: TypeFilter[] = [
     "all",
@@ -274,11 +327,21 @@ function TrainerMealsPage() {
               type="button"
               variant="outline"
               className="h-10 rounded-xl text-destructive hover:bg-destructive/10 hover:text-destructive"
-              disabled={!selectedClient || clearingMeals}
-              onClick={() => setClearDialogOpen(true)}
+              disabled={!selectedClient || isClearing}
+              onClick={() => openClearDialog("meals")}
             >
               <Trash2 className="h-4 w-4" />
-              Clear selected
+              Clear meal updates
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-10 rounded-xl"
+              disabled={!selectedClient || isClearing || selectedClientMissedCount === 0}
+              onClick={() => openClearDialog("missed")}
+            >
+              <Eraser className="h-4 w-4" />
+              Clear missed updates
             </Button>
           </div>
         </div>
@@ -326,29 +389,25 @@ function TrainerMealsPage() {
       ) : null}
 
       <AlertDialog
-        open={clearDialogOpen}
+        open={clearAction !== null}
         onOpenChange={(next) => {
-          if (!next && !clearingMeals) setClearDialogOpen(false);
+          if (!next && !isClearing) setClearAction(null);
         }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Clear meal history?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This permanently deletes all meal updates for{" "}
-              {selectedClient?.name ?? "the selected client"} through today and clears their missed
-              meal updates through today.
-            </AlertDialogDescription>
+            <AlertDialogTitle>{clearDialogTitle}</AlertDialogTitle>
+            <AlertDialogDescription>{clearDialogDescription}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={clearingMeals}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={isClearing}>Cancel</AlertDialogCancel>
             <button
               type="button"
-              onClick={clearSelectedClientMeals}
-              disabled={clearingMeals || !selectedClient}
+              onClick={confirmClearAction}
+              disabled={isClearing || !selectedClient}
               className="inline-flex h-9 items-center justify-center rounded-md bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground shadow transition-colors hover:bg-destructive/90 disabled:pointer-events-none disabled:opacity-50"
             >
-              {clearingMeals ? "Clearing..." : "Clear history"}
+              {clearDialogButton}
             </button>
           </AlertDialogFooter>
         </AlertDialogContent>

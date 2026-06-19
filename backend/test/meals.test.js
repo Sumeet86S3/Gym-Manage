@@ -147,7 +147,7 @@ test("trainer meal pagination returns stable pages and next page state", async (
   );
 });
 
-test("trainer can clear selected client meal updates and missed meals through today", async () => {
+test("trainer can clear selected client meal updates without clearing missed meals", async () => {
   const originalFetch = globalThis.fetch;
   const deletedImagekitFileIds = [];
   globalThis.fetch = async (url, options) => {
@@ -173,6 +173,41 @@ test("trainer can clear selected client meal updates and missed meals through to
   assert.deepEqual(rows.map((row) => row.clientId).sort(), [ids.clientWeek, ids.clientWeek]);
 
   const summary = await mealsService.missedSummary(trainerUser);
+  assert.equal(summary.totalMissed, 68);
+  assert.deepEqual(summary.clients, [
+    {
+      clientId: ids.clientWeek,
+      clientName: "Week Client",
+      missedCount: 54,
+      lastMissedDate: dateInput(daysAgo(1)),
+    },
+    {
+      clientId: ids.clientToday,
+      clientName: "Today Client",
+      missedCount: 14,
+      lastMissedDate: dateInput(daysAgo(1)),
+    },
+  ]);
+
+  const [clearance] = await db
+    .select()
+    .from(mealClearances)
+    .where(eq(mealClearances.clientId, ids.clientToday))
+    .limit(1);
+  assert.equal(clearance, undefined);
+});
+
+test("trainer can clear selected client missed meals through today", async () => {
+  const result = await mealsService.clearMissedForClient(trainerUser, { clientId: ids.clientToday });
+
+  assert.equal(result.clientId, ids.clientToday);
+  assert.equal(result.clientName, "Today Client");
+  assert.equal(result.clearedThrough, dateInput(now));
+
+  const rows = await mealsService.list(trainerUser, { range: "all", type: "all" });
+  assert.deepEqual(rows.map((row) => row.clientId).sort(), [ids.clientWeek, ids.clientWeek]);
+
+  const summary = await mealsService.missedSummary(trainerUser);
   assert.equal(summary.totalMissed, 54);
   assert.deepEqual(
     summary.clients.map((client) => client.clientId),
@@ -190,6 +225,13 @@ test("trainer can clear selected client meal updates and missed meals through to
 test("trainer cannot clear another trainer's client meals", async () => {
   await assert.rejects(
     mealsService.clearForClient(trainerUser, { clientId: ids.clientOtherTrainer }),
+    /Client not found/,
+  );
+});
+
+test("trainer cannot clear another trainer's missed meals", async () => {
+  await assert.rejects(
+    mealsService.clearMissedForClient(trainerUser, { clientId: ids.clientOtherTrainer }),
     /Client not found/,
   );
 });
